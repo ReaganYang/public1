@@ -1,0 +1,224 @@
+/*
+*
+*                Language Independent Library
+*
+*        Copyright 1983-2000 Green Hills Software,Inc.
+*
+*  This program is the property of Green Hills Software, Inc,
+*  its contents are proprietary information and no part of it
+*  is to be disclosed to anyone except employees of Green Hills
+*  Software, Inc., or as agreed in writing signed by the President
+*  of Green Hills Software, Inc.
+*
+*/
+/* ind_mcnt.ppc: compiler internal wrapper for Call Count Profiling (PPC). */
+
+	.file	"ind_mcnt.ppc"
+#include "ppc_regs.ppc"
+	dtrace_stamp ind_mcnt.ppc
+
+#if defined(EMBEDDED) || defined(__VXWORKS) || defined(CHORUS) || defined (__OSE)
+
+#ifdef __vle
+	.section ".vletext", "vax"
+	.vle
+	
+ ; Assembly-language interface to __mcount_ghs.
+ ; Call with 4(sp) holding the address of a count variable, which we will
+ ; pass on.  We also need to pass address of our caller, and
+ ; address of address of our caller's caller.
+ ; We must not harm any argument registers.
+SF=40	; stack frame size
+#define FRAME_SIZE 40
+	.globl	__ghs_mcount
+__ghs_mcount:
+	safe_stack_push -SF	; make a stack frame
+	se_stw	r3, 8(sp)	; save all arg regs
+	se_stw	r4, 12(sp)
+	se_stw	r5, 16(sp)
+	se_stw	r6, 20(sp)
+	se_stw	r7, 24(sp)
+	e_stw	r8, 28(sp)
+	e_stw	r9, 32(sp)
+	e_stw	r10, 36(sp)
+	se_lwz	r3, SF+4(sp)	; get our argument
+	se_mflr	r4		; get our caller's address
+	se_stw	r4, SF+4(sp)	; save it in normal spot
+#if defined(TRANSFER_VECTOR)
+	e_bl	%tv(__ghs_indmcount)
+#else
+	e_bl	__ghs_indmcount
+#endif
+1:
+	se_lwz	r3, SF+4(sp)	; get back our caller's address
+	se_mtlr	r3		; be ready to return to it
+	se_lwz	r3, 8(sp)	; restore all arg regs
+	se_lwz	r4, 12(sp)
+	se_lwz	r5, 16(sp)
+	se_lwz	r6, 20(sp)
+	se_lwz	r7, 24(sp)
+	e_lwz	r8, 28(sp)
+	e_lwz	r9, 32(sp)
+	e_lwz	r10, 36(sp)
+	se_lwz	sp, 0(sp)	; restore stack
+	se_blr			; and return
+#else /* __vle */
+	.text
+
+ ; Assembly-language interface to __mcount_ghs.
+ ; Call with 4(sp) holding the address of a count variable, which we will
+ ; pass on.  We also need to pass address of our caller, and
+ ; address of address of our caller's caller.
+ ; We must not harm any argument registers.
+#if defined(__PPC64_ABI__) && !defined(__PPC64_NO_FUNC_DESC)
+	.section ".opd", "aw"
+	.align 3
+	.global __ghs_mcount
+__ghs_mcount:
+	.quad	.__ghs_mcount, .TOC.@tocbase, 0
+	.size 	__ghs_mcount, 24
+
+	.text
+	.globl  .__ghs_mcount
+.__ghs_mcount:
+#else
+	.globl	__ghs_mcount
+__ghs_mcount:
+#endif
+
+#ifdef __PPC64_ABI__
+SF=112;	stack frame size
+#define FRAME_SIZE 112
+	safe_stack_push -SF	; make a stack frame
+	std	r3, 48(sp)	; save all arg regs
+	std	r4, 56(sp)
+	std	r5, 64(sp)
+	std	r6, 72(sp)
+	std	r7, 80(sp)
+	std	r8, 88(sp)
+	std	r9, 96(sp)
+	std	r10,104(sp) 
+	ld	r3, SF+8(sp)	; get our argument
+	mflr	r4		; get our caller's address
+	std	r4, SF+16(sp)	; save it in normal spot
+#if defined(TRANSFER_VECTOR)
+	bl	%tv(__ghs_indmcount)
+#else
+	bl	__ghs_indmcount
+#endif
+#ifdef __PPC64_ABI__
+	nop
+#endif
+	ld	r3, SF+16(sp)	; get back our caller's address
+	mtlr	r3		; be ready to return to it
+	ld	r3, 48(sp)	; restore all arg regs
+	ld	r4, 56(sp)
+	ld	r5, 64(sp)
+	ld	r6, 72(sp)
+	ld	r7, 80(sp)
+	ld	r8, 88(sp)
+	ld	r9, 96(sp)
+	ld	r10,104(sp)
+        ld      sp, 0(sp)       ; restore stack
+        blr                     ; and return
+#elif __PPC64__
+SF=80	; stack frame size
+#define FRAME_SIZE 80
+	safe_stack_push -SF	; make a stack frame
+	std	r3, 16(sp)	; save all arg regs
+	std	r4, 24(sp)
+	std	r5, 32(sp)
+	std	r6, 40(sp)
+	std	r7, 48(sp)
+	std	r8, 56(sp)
+	std	r9, 64(sp)
+	std	r10, 72(sp)
+	ld	r3, SF+8(sp)	; get our argument
+	mflr	r4		; get our caller's address
+	std	r4, SF+8(sp)	; save it in normal spot
+#if defined(TRANSFER_VECTOR)
+	bl	%tv(__ghs_indmcount)
+#else
+	bl	__ghs_indmcount
+#endif
+#ifdef __PPC64_ABI__
+	nop
+#endif
+1:
+	ld	r3, SF+8(sp)	; get back our caller's address
+	mtlr	r3		; be ready to return to it
+	ld	r3, 16(sp)	; restore all arg regs
+	ld	r4, 24(sp)
+	ld	r5, 32(sp)
+	ld	r6, 40(sp)
+	ld	r7, 48(sp)
+	ld	r8, 56(sp)
+	ld	r9, 64(sp)
+	ld	r10, 72(sp)
+	ld	sp, 0(sp)	; restore stack
+	blr			; and return
+#else
+SF=40	; stack frame size
+#define FRAME_SIZE 40
+	stack_entry
+	block_entry
+	safe_stack_push	-SF	; make a stack frame
+	word_preimage	sp, 8
+	stw	r3, 8(sp)	; save all arg regs
+	word_preimage	sp, 12
+	stw	r4, 12(sp)
+	word_preimage	sp, 16
+	stw	r5, 16(sp)
+	word_preimage	sp, 20
+	stw	r6, 20(sp)
+	word_preimage 	sp, 24
+	stw	r7, 24(sp)
+	word_preimage	sp, 28
+	stw	r8, 28(sp)
+	word_preimage	sp, 32
+	stw	r9, 32(sp)
+	word_preimage sp, 36
+	stw	r10, 36(sp)
+	lwz	r3, SF+4(sp)	; get our argument
+	mflr	r4		; get our caller's address
+	word_preimage sp, SF+4
+	stw	r4, SF+4(sp)	; save it in normal spot
+#if defined(TRANSFER_VECTOR)
+	bl	%tv(__ghs_indmcount)
+#else
+	bl	__ghs_indmcount
+#endif
+#ifdef __PPC64_ABI__
+	nop
+#endif
+1:
+	block_entry
+	lwz	r3, SF+4(sp)	; get back our caller's address
+	mtlr	r3		; be ready to return to it
+	lwz	r3, 8(sp)	; restore all arg regs
+	lwz	r4, 12(sp)
+	lwz	r5, 16(sp)
+	lwz	r6, 20(sp)
+	lwz	r7, 24(sp)
+	lwz	r8, 28(sp)
+	lwz	r9, 32(sp)
+	lwz	r10, 36(sp)
+	lwz	sp, 0(sp)	; restore stack
+	stack_exit
+	blr			; and return
+#endif /* __PPC64__ */
+#endif /* __vle */
+
+#ifdef __ELF
+	.fsize	FRAME_SIZE
+	.scall	__ghs_indmcount
+#if defined(__PPC64_ABI__) && !defined(__PPC64_NO_FUNC_DESC)
+	.type .__ghs_mcount,@function
+	.size .__ghs_mcount,$-.__ghs_mcount
+#else
+	.type __ghs_mcount,@function
+	.size __ghs_mcount,$-__ghs_mcount
+#endif
+#endif /* __ELF */
+
+#endif /* EMBEDDED */

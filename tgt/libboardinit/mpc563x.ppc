@@ -1,0 +1,231 @@
+/*
+*
+*                Board Initialization Library
+*
+*       Copyright 2008 Green Hills Software,Inc.
+*
+*  This program is the property of Green Hills Software, Inc,
+*  its contents are proprietary information and no part of it
+*  is to be disclosed to anyone except employees of Green Hills
+*  Software, Inc., or as agreed in writing signed by the President
+*  of Green Hills Software, Inc.
+*
+*/
+        .weak __ghs_rambootcodestart
+        .weak __ghs_rambootcodeend
+        .weak __ghs_rombootcodestart
+        .weak __ghs_rombootcodeend
+
+
+
+
+#if defined(__vle)
+
+	.text
+	.align	2
+	.section ".vletext", "vax"
+	.vle
+	.global	__ghs_board_memory_init
+
+
+__ghsautoimport_ghs_board_memory_init::
+; void __ghs_board_memory_init(void) 
+__ghs_board_memory_init:
+
+#if defined(__SPE__)
+// Enable SPE
+	mfmsr r4
+	e_lis r5, 0x0200
+	se_or  r4, r5
+	mtmsr r4
+#endif
+
+// Return if not running from ROM
+	se_mflr r5
+	e_lis r4, %hiadj(__ghs_rombootcodeend)
+	e_add16i r4, r4, %lo(__ghs_rombootcodeend)
+	cmplw r5, r4
+	se_bge L_88
+
+	e_lis r4, %hiadj(__ghs_rombootcodestart)
+	e_add16i r4, r4, %lo(__ghs_rombootcodestart)
+	cmplw r5, r4
+	se_blt L_88
+
+
+; The code below initializes the ECC bits of the target's SRAM by
+; filling it with valid opcodes.
+; We assume that the __ghs_ramstart symbol is 4-byte aligned
+
+// C code... 
+//extern char __ghs_ramstart[];
+//extern char __ghs_ramend[];
+//
+// ... 
+//
+//    register int *memstart = &__ghs_ramstart;
+//    register int *memend = &__ghs_ramend;
+//
+//    if (!memstart || !memend)
+//        return;
+//
+//    while (memstart < memend)
+//        *memstart++ = 0xe800e800;
+
+// Optimized for speed
+	e_lis     r11, %hiadj(__ghs_ramstart)
+	e_lis     r0, %hiadj(__ghs_ramend)
+	e_add16i  r11, r11, %lo(__ghs_ramstart)
+	e_add16i  r0, r0, %lo(__ghs_ramend)
+	mr        r12, r11
+	cmplw     r11, r0
+	se_bge    L_88
+	e_subi    r10, r0, 1
+	subf      r11, r11, r10
+	srawi     r11, r11, 2
+	addze     r10, r11
+	e_addi    r10, r10, 1
+	e_srwi.   r10, r10, 3
+	se_beq    L_72
+	e_lis     r11, 0xe801
+	e_subi    r12, r12, 0x20
+	mtctr     r10
+	e_sub16i  r11, r11, 0x1800
+L_44:
+	e_stwu    r11, 0x20(r12)
+	e_stw     r11, 4(r12)
+	e_stw     r11, 8(r12)
+	e_stw     r11, 0xc(r12)
+	e_stw     r11, 0x10(r12)
+	e_stw     r11, 0x14(r12)
+	e_stw     r11, 0x18(r12)
+	e_stw     r11, 0x1c(r12)
+	e_bdnz    L_44
+	e_addi    r12, r12, 0x20
+	cmplw     r12, r0
+	se_bge    L_88
+L_72:
+	e_lis     r10, 0xe801
+	e_sub16i  r10, r10, 0x1800
+L_7a:
+	e_stw     r10, 0(r12)
+	e_addi    r12, r12, 4
+	cmplw     r12, r0
+	se_blt    L_7a
+L_88:
+	se_blr
+
+	.type	__ghs_board_memory_init,@function
+	.size	__ghs_board_memory_init,$-__ghs_board_memory_init
+
+
+/* Reset Configuration Halfword (RCHW) : BOOTID = 0x5a  */
+	.section ".rchw","ax"
+__ghsautoimport_ghs_board_devices_resetvector::
+__ghs_board_devices_resetvector:
+        .long   0x015a0000
+	.long   __ghs_rombootcodestart
+
+
+#else  /* defined(__vle) */
+	.text
+	.align	2
+	.section ".text", "ax"
+	.global	__ghs_board_memory_init
+
+__ghsautoimport_ghs_board_memory_init::
+; void __ghs_board_memory_init(void) 
+__ghs_board_memory_init:
+
+#if defined(__SPE__)
+// Enable SPE
+	mfmsr r4
+	oris r4, r4, 0x0200
+	mtmsr r4
+#endif
+
+
+// Return if not running from ROM
+	mflr r5
+	lis r4, %hiadj(__ghs_rombootcodeend)
+	addi r4, r4, %lo(__ghs_rombootcodeend)
+	cmplw r5, r4
+	bge L_88
+
+	lis r4, %hiadj(__ghs_rombootcodestart)
+	addi r4, r4, %lo(__ghs_rombootcodestart)
+	cmplw r5, r4
+	blt L_88
+
+
+; The code below initializes the ECC bits of the target's SRAM by
+; filling it with valid opcodes.
+; We assume that the __ghs_ramstart symbol is 4-byte aligned
+
+// C code... 
+//extern char __ghs_ramstart[];
+//extern char __ghs_ramend[];
+//
+// ... 
+//
+//    register int *memstart = &__ghs_ramstart;
+//    register int *memend = &__ghs_ramend;
+//
+//    if (!memstart || !memend)
+//        return;
+//
+//    while (memstart < memend)
+//        *memstart++ = 0x48000000;
+
+	lis     r11, %hiadj(__ghs_ramstart)
+	lis     r9, %hiadj(__ghs_ramend)
+	addi  r11, r11, %lo(__ghs_ramstart)
+	addi  r9, r9, %lo(__ghs_ramend)
+	mr        r12, r11
+	cmplw     r11, r9
+	bge    L_88
+	subi    r10, r9, 1
+	subf      r11, r11, r10
+	srawi     r11, r11, 2
+	addze     r10, r11
+	addi    r10, r10, 1
+	srwi.   r10, r10, 3
+	beq    L_72
+	lis     r11, 0x4800
+	subi    r12, r12, 0x20
+	mtctr     r10
+L_44:
+	stwu    r11, 0x20(r12)
+	stw     r11, 4(r12)
+	stw     r11, 8(r12)
+	stw     r11, 0xc(r12)
+	stw     r11, 0x10(r12)
+	stw     r11, 0x14(r12)
+	stw     r11, 0x18(r12)
+	stw     r11, 0x1c(r12)
+	bdnz    L_44
+	addi    r12, r12, 0x20
+	cmplw     r12, r9
+	bge    L_88
+L_72:
+	lis     r10, 0x4800
+L_7a:
+	stw     r10, 0(r12)
+	addi    r12, r12, 4
+	cmplw     r12, r9
+	blt    L_7a
+L_88:
+	blr
+
+
+	.type	__ghs_board_memory_init,@function
+	.size	__ghs_board_memory_init,$-__ghs_board_memory_init
+
+/* Reset Configuration Halfword (RCHW) : BOOTID = 0x5a  */
+	.section ".rchw","ax"
+__ghsautoimport_ghs_board_devices_resetvector::
+__ghs_board_devices_resetvector:
+        .long   0x005a0000
+	.long   __ghs_rombootcodestart
+	
+#endif /* defined(__vle) */

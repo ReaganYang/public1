@@ -1,0 +1,149 @@
+#if 0
+/*
+ *   Copyright 2004-2006 by Green Hills Software,Inc.
+ *
+ *  This program is the property of Green Hills Software, Inc,
+ *  its contents are proprietary information and no part of it
+ *  is to be disclosed to anyone except employees of Green Hills
+ *  Software, Inc., or as agreed in writing signed by the President
+ *  of Green Hills Software, Inc.
+ */
+#endif
+#ifndef _PPC_REGS
+#define _PPC_REGS
+
+#if defined(__COFF) && defined(__GlobalRegisters)
+/* For COFF, we want to include the number of Global Registers in the
+ * symbol table.
+ */
+	.def	_GREG
+	.scl	3
+	.type	 4
+	.val	__GlobalRegisters
+	.endef
+#endif
+#if defined(__COFF) && defined(__GlobalFloatingPointRegisters)
+	.def	_FPGREG
+	.scl	3
+	.type	 4
+	.val	__GlobalFloatingPointRegisters
+	.endef	
+#endif
+
+#if defined(__SPE__) && defined(USES_SPE)
+/* For code that might use isel or e500 SIMD instructions, remember to
+ * mark them with the appropriate APU numbers.
+ */
+	.note ".PPC.EMB.apuinfo",""
+	.long	0x00000008
+	.long	8
+	.long	0x00000002
+	.byte	65,80,85,105
+	.byte	110,102,111,0
+	.long	0x00400001
+	.long	0x01000001
+	.previous
+#endif
+
+#if defined(__GHS_DTRACE_INSTRUMENTATION)
+#  include "ppc_regs_itm.ppc"
+#else
+	.macro stack_entry
+	.endm
+	.macro explicit_stack_exit
+	.endm
+	.macro explicit_stack_depth_clobber
+	.endm
+	.macro stack_exit
+	.endm
+	.macro explicit_block_entry
+	.endm
+	.macro block_entry
+	.endm
+	.macro word_preimage a, b
+	.endm
+	.macro halfword_preimage a, b
+	.endm
+	.macro word_preimage_postaddr_explicit
+	.endm
+	.macro byte_preimage a, b
+	.endm
+	.macro dword_preimage a, b
+	.endm
+	.macro safe_stack_push offset
+	stack_push offset, r12
+	.endm
+	.macro stack_push_stacktemp offset
+	stack_push offset, r12
+	.endm
+	.macro stack_push offset tmpreg
+#  if defined(__vle)
+	e_stwu sp, offset(sp)
+#  else /* __vle */
+#    if __PTR_BIT == 64
+	stdu	sp, offset(sp)
+#    elif __PTR_BIT == 32
+	stwu	sp, offset(sp)
+#    else
+	.error Unknown PTR_BIT
+#    endif /* __PTR_BIT */
+#  endif /* __vle */
+	.endm
+	.macro safe_stmw reg, offset, areg
+	stmw	reg, offset(areg)
+	.endm
+	.macro not_dtrace_instrumented
+	.endm
+	.macro dtrace_stamp a
+	.endm
+	.macro dtrace_compat a
+	.endm
+	.macro ghpepatch_start a b c d
+	.endm
+	.macro ghpepatch_end a b c d
+	.endm
+	.macro ghs_log_prologue a
+	.endm
+	.macro ghs_log_epilogue a
+	.endm
+	.macro ghs_log_cond_ret a, b
+	.endm
+	.macro ghs_pro_ghpepatch a
+	.endm
+	.macro ghs_epi_ghpepatch a
+	.endm
+	.macro ghs_fee_ghpepatch a
+	.endm
+	.macro ghs_cond_return_ghpepatch a
+	.endm
+	.macro dtrace_deferred_stack_entry
+	.endm
+	.macro dtrace_deferred_block_entry
+	.endm
+	.macro dtrace_deferred_log_entry a
+	.endm
+	.macro dtrace_deferred_word_preimage_full a, b
+	.endm
+	.macro dtrace_deferred_word_preimage_only a, b
+	.endm
+	.macro dtrace_deferred_dword_preimage_full a, b
+	.endm
+	.macro dtrace_deferred_dword_preimage_only a, b
+	.endm
+	.macro dtmeta_patch_stack_entry
+	.endm
+	.macro dtmeta_patch_stack_exit
+	.endm
+	.macro dtmeta_patch_block_entry
+	.endm
+	.macro dtmeta_patch_store a, b, c
+	.endm
+	.macro dtmeta_patch_inferred_store a, b, c
+	.endm
+	.macro dtmeta_patch_start a
+	.endm
+	.macro dtmeta_patch_end a
+	.endm
+#endif
+
+#endif

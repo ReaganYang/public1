@@ -1,0 +1,154 @@
+// MULTI Server Script
+//
+// Freescale MPC563x demo board setup script for PEServ
+//
+
+// MP: target tlbw $entry $vaddr $vtag $paddr $ptag                                   
+//   $vtag bits:
+//     V    = 0x01000000
+//     Size = 0x00780000 (bits 19..22 where bit 0 is lsb)
+//     I    = 0x00000200
+//     G    = 0x00000080
+//     UX   = 0x00000020
+//     SX   = 0x00000010
+//     UW   = 0x00000008
+//     SW   = 0x00000004
+//     UR   = 0x00000002
+//     SR   = 0x00000001
+//   $ptag bits:
+//     Iprot = 0x1
+
+
+// reset
+target rst
+
+
+// Setup TLB entries the boot monitor would normally handle
+
+// MP: target tlbw 0 0xfff00000 0x12802bf 0xfff00000 0x1
+target reg mas0 0x10000000
+target reg mas1 0xC0000500
+target reg mas2 0xFFF0000A
+target reg mas3 0xFFF0003F
+target inst 0x7C0007A4
+	
+// enable internal flash memory (address 0x00000000)
+// MP: target tlbw 1 0x00000000 0x138003f 0x00000000 0x1
+// TLBSEL=1; ESELCAM=1 (entry select)
+target reg mas0 0x10010000
+// VALID=1; IPROT=1; TID=0 (define entry as global); TSIZE=7 (16MB)
+target reg mas1 0xC0000700
+// I=1 (cache inhibited); G=0 (not guarded)
+target reg mas2 0x00000008
+// PERMIS=0x3f (UX=SX=UW=SW=UR=SR=1)
+target reg mas3 0x0000003F
+target inst 0x7C0007A4
+
+// MP: target tlbw 2 0x20000000 0x138003f 0x00000000 0x1
+target reg mas0 0x10020000
+target reg mas1 0xC0000700
+target reg mas2 0x20000000
+target reg mas3 0x3F
+target inst 0x7C0007A4
+	
+// map the internal 256K SRAM (address 0x40000000)
+// MP: target tlbw 3 0x40000000 0x120023f 0x40000000 0x1
+// TLBSEL=1; ESELCAM=3 (entry select)
+target reg mas0 0x10030000
+// VALID=1; IPROT=1; TID=0 (define entry as global); TSIZE=4 (256k)
+target reg mas1 0xC0000400
+// I=1 (cache inhibited); G=0 (not guarded); Don't flip VLE bit until later, if necessary
+target reg mas2 0x40000008
+// PERMIS=0x3f (UX=SX=UW=SW=UR=SR=1)
+target reg mas3 0x4000003F
+target inst 0x7C0007A4
+
+// allow access to the flash config registers (address 0xC3F00000)
+// MP: target tlbw 4 0xc3f00000 0x12802bf 0xc3f00000 0x1
+// TLBSEL=1; ESELCAM=4 (entry select)
+target reg mas0 0x10040000
+// VALID=1; IPROT=1; TID=0 (define entry as global); TSIZE=5 (1MB)
+target reg mas1 0xC0000500
+// I=1 (cache inhibited); G=1 (guarded)
+target reg mas2 0xC3F0000A
+// PERMIS=0x3f (UX=SX=UW=SW=UR=SR=1)
+target reg mas3 0xC3F0003F
+target inst 0x7C0007A4	
+
+
+target reg msr 0x02000000
+
+//turn off the watchdog timer
+memwrite 4 0xfff38000 0xff00000a
+
+// Whether or not to check for VLE
+eval $vle_check = 1
+
+// Initialize vector pointers to something that exists
+// Currently, use internal SRAM
+eval $ivpr = 0x40000000
+eval $ivor0 = 0x10
+eval $ivor1 = 0x20
+eval $ivor2 = 0x30
+eval $ivor3 = 0x40
+eval $ivor4 = 0x50
+eval $ivor5 = 0x60
+eval $ivor6 = 0x70
+eval $ivor7 = 0x80
+eval $ivor8 = 0x90
+eval $ivor9 = 0xa0
+eval $ivor10 = 0xb0
+eval $ivor11 = 0xc0
+eval $ivor12 = 0xd0
+eval $ivor13 = 0xe0
+eval $ivor14 = 0xf0
+eval $ivor15 = 0x100
+eval $ivor32 = 0x110
+eval $ivor33 = 0x120
+eval $ivor34 = 0x130
+
+// Fill exception vectors with branch to self
+// Also, initialize all SRAM ECC bits by performing a fill
+// You will want to select the appropriate line below depending on how much
+// memory your target has
+
+// Fill memory in 16k chunks because anything larger results in an error
+//  (NOTE: data value is specified in little-endian format)
+target blockfill -d4 0x40000000 0x1000 0x00000048 //0k-16k SRAM
+//target blockfill -d4 0x40004000 0x800 0x00000048 //16k-24k SRAM
+target blockfill -d4 0x40004000 0x1000 0x00000048 //16k-32k SRAM
+//target blockfill -d4 0x40008000 0x800 0x00000048 //32k-40k SRAM
+target blockfill -d4 0x40008000 0x1000 0x00000048 //32k-48k SRAM
+//target blockfill -d4 0x4000c000 0x1000 0x00000048 //48k-64k SRAM
+
+
+// Check for VLE.
+// If the .vletext exists, we will assume that the entire program is built
+// in VLE mode, and set both internal and external SRAMs accordingly.
+// If different/additional pages need to have VLE enabled, this is where
+// to do it.
+if ($vle_check == 1)  {
+    if ($M_sec_exists(".vletext") || $PROGRAMMING_FLASH)  {
+	print "Configuring TLB pages for VLE."
+	
+	// Turn on VLE bit for internal SRAM (address 0x40000000)
+	// MP: target tlbw 3 0x40000000 0x0320003f 0x40000000 0x01
+	// TLBSEL=1; ESELCAM=3 (entry select)
+	target reg mas0 0x10030000
+	// VALID=1; IPROT=1; TID=0 (define entry as global); TSIZE=4 (256k)
+	target reg mas1 0xC0000400
+	// I=1 (cache inhibited); G=0 (not guarded); VLE=1
+	target reg mas2 0x40000028
+	// PERMIS=0x3f (UX=SX=UW=SW=UR=SR=1)
+	target reg mas3 0x4000003F
+	target inst 0x7C0007A4
+
+	// Fill exception vectors with VLE branch to self
+	//  (NOTE: data value is specified in little-endian format)
+	// MP: target mf 0x40000000 0x200 0xe800e800
+	target blockfill -d4 0x40000000 0x80 0x00e800e8 //0b-512b SRAM
+
+    	$RAM_VLE = 1;
+    }
+}
+

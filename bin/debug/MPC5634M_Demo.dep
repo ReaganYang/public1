@@ -1,0 +1,26 @@
+C:\Users\lenovo-T450\Documents\My\ Projects\MPC5634M_Demo\bin\debug\MPC5634M_Demo: \
+ tgt\standalone_romrun.ld \
+ C:\Users\lenovo-T450\Documents\My\ Projects\MPC5634M_Demo\crt0.o \
+ objs\debug\MPC5634M_Demo\main.o \
+ C:\Users\lenovo-T450\Documents\My\ Projects\MPC5634M_Demo\libstartup\libstartup.a \
+ C:\Users\lenovo-T450\Documents\My\ Projects\MPC5634M_Demo\libsys\libsys.a \
+ C:\Users\lenovo-T450\Documents\My\ Projects\MPC5634M_Demo\libboardinit\libboardinit.a \
+ C:\ghs\comp_201516\lib\ppc8540\libmulti.a \
+ C:\ghs\comp_201516\lib\ppc8540\libfmalloc.a \
+ C:\ghs\comp_201516\lib\ppc8540\libwchar_s32.a \
+ C:\ghs\comp_201516\lib\ppc8540\libansi.a \
+ C:\ghs\comp_201516\lib\ppc8540\libwc_s32.a \
+ C:\ghs\comp_201516\lib\ppc8540\libmath.a \
+ C:\ghs\comp_201516\lib\ppc8540\libind.a \
+ C:\ghs\comp_201516\lib\ppc8540\libarch.a
+
+:cmdList=ccppc $(FILETYPEOPTIONS) $(OBJECTS) -MD -G -Odebug -bsp mpc563,563xM --ee -object_dir=objs\debug\MPC5634M_Demo -startfile_dir='C:\\Users\\lenovo-T450\\Documents\\My Projects\\MPC5634M_Demo' -L'C:\\Users\\lenovo-T450\\Documents\\My Projects\\MPC5634M_Demo\\libstartup' -lstartup -L'C:\\Users\\lenovo-T450\\Documents\\My Projects\\MPC5634M_Demo\\libsys' -lsys -L'C:\\Users\\lenovo-T450\\Documents\\My Projects\\MPC5634M_Demo\\libboardinit' -lboardinit -top_project "C:\\Users\\lenovo-T450\\Documents\\My Projects\\MPC5634M_Demo\\default.gpj" -o "C:\\Users\\lenovo-T450\\Documents\\My Projects\\MPC5634M_Demo\\bin\\debug\\MPC5634M_Demo" ; 
+:cmdHash=0xd3d1c6f8
+
+:objList=objs\debug\MPC5634M_Demo\main.o tgt\standalone_romrun.ld ; 
+:objHash=0x07321592
+
+:installDir=c:\ghs\comp_201516
+:installDirHash=0x9d4d044d
+
+:config=DBG

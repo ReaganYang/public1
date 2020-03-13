@@ -1,0 +1,172 @@
+Host OS:	Windows 7 Service Pack 1
+ELXR: Copyright (C) 1983-2015 Green Hills Software.  All Rights Reserved.
+Release: Compiler v2015.1.6
+Build Directory: [Directory] COMP-VAL-WIN31:l:/compiler/release-branch-2015-1-comp/build/v2015.1-2015-10-18/win64-comp
+Revision: [VCInfo] http://toolsvc/branches/release-branch-70/src@543895 (built by auto-compiler)
+Revision Date: Mon Oct 19 14:26:52 2015
+
+Release Date: Mon Oct 19 16:04:54 2015
+
+
+
+
+Load Map Mon Aug 06 22:08:17 2018
+Image Summary
+
+  Section              Base      Size(hex)    Size(dec)  SecOffs
+  .rchw                00000000  00000008            8   0000160
+  .PPC.EMB.sdata0      40000100  00000000            0   0000000
+  .PPC.EMB.sbss0       40000100  00000000            0   0000000
+  .sdabase             40000100  00000000            0   0000000
+  .sdata               40000100  00000000            0   0000000
+  .sbss                40000100  00000000            0   0000000
+  .data                40000100  00000004            4   0000fc8
+  .bss                 40000104  00000424         1060   0000000
+  .heap                40000530  00002000         8192   0000000
+  .stack               40002530  00001000         4096   0000000
+  .text                00000008  00000e10         3600   0000168
+  .vletext             00000e18  00000000            0   0000000
+  .syscall             00000e18  00000008            8   0000f78
+  .rodata              00000e20  00000000            0   0000000
+  .sdata2              00000e20  00000000            0   0000000
+  .secinfo             00000e20  00000048           72   0000f80
+  .fixaddr             00000e68  00000000            0   0000000
+  .fixtype             00000e68  00000000            0   0000000
+  .CROM.PPC.EMB.sdata0 00000e68  00000000            0   0000000
+  .CROM.sdata          00000e68  00000000            0   0000000
+  .CROM.data           00000e68  00000005            5   0000fc8
+  .UNCOMPRESSED.PPC.EMB.sdata0 00000000  00000000            0   0000000
+  .UNCOMPRESSED.sdata  00000000  00000000            0   0000000
+  .UNCOMPRESSED.data   00000000  00000004            4   0000fcd
+  .PPC.EMB.apuinfo     00000000  00000020           32   0000fd1
+  .gstackfix           00000000  00000000            0   0000000
+
+Load Map Mon Aug 06 22:08:17 2018
+Module Summary
+
+  Origin+Size    Section          Module
+00000008+000104  .text            crt0.o
+0000010c+0001a0  .text            main.o
+000002ac+00000c  .text            libmulti.a
+40000100+000004  .data            libmulti.a
+4000013c+0003e8  .bss             libmulti.a
+000002b8+0003d4  .text            libstartup.a(ind_crt0.o)
+0000068c+000140  .text            libstartup.a(ind_uzip.o)
+000007cc+000074  .text            libstartup.a(ind_mset.o)
+00000840+000200  .text            libstartup.a(ind_mcpy.o)
+00000e18+000008  .syscall         libsys.a(ind_dots.o)
+00000a40+000118  .text            libsys.a(ind_crt1.o)
+00000b58+0000b4  .text            libsys.a(ind_exit.o)
+40000524+000004  .bss             libsys.a(ind_exit.o)
+00000c0c+00009c  .text            libsys.a(ind_call.o)
+00000ca8+00000c  .text            libsys.a(ind_lock.o)
+00000cb4+000030  .text            libsys.a(ind_errn.o)
+00000ce4+0000bc  .text            libboardinit.a(mpc563x.o)
+00000000+000008  .rchw            libboardinit.a(mpc563x.o)
+00000da0+000050  .text            libansi.a(ccexit.o)
+00000df0+000028  .text            libarch.a(indarcha.o)
+00000000+000020  .PPC.EMB.apuinfo <PPC APUinfo>
+00000000+000004  .UNCOMPRESSED.data <UNCOMPRESSED>
+00000e20+000048  .secinfo         <section info>
+40000104+000038  COMMON -> .bss   <commons>
+
+Load Map Mon Aug 06 22:08:17 2018
+Global Symbols (sorted alphabetically)
+
+ .text            00000b58+000068 _Exit
+ .sdata2          00008e20+000000 _SDA2_BASE_
+ .sdabase         40008100+000000 _SDA_BASE_
+                  00000000+000000 __atexit_cleanup_func
+                  00000000+000000 __cpp_exception_cleanup
+                  00000000+000000 __cpp_exception_init
+ .syscall         00000e18+000008 __dotsyscall
+ .text            00000cb4+000010 __gh_errno_ptr
+ .text            00000cd4+000010 __gh_get_errno
+                  00000000+000000 __gh_iob_init
+ .text            00000cb0+000004 __gh_lock_init
+ .text            00000cc4+000010 __gh_set_errno
+ .text            00000ca8+000004 __ghsLock
+ .text            00000cac+000004 __ghsUnlock
+ .text            00000bc0+00004c __ghs_at_exit
+                  00000000+000000 __ghs_board_cache_sync
+                  00000000+000000 __ghs_board_devices_init
+ .text            00000ce4+0000bc __ghs_board_memory_init
+                  00000000+000000 __ghs_checksum
+                  00000000+000000 __ghs_coverage_init
+                  00000000+000000 __ghs_cpp_exception_cleanup
+                  00000000+000000 __ghs_cpp_exception_init
+ .text            0000068c+000140 __ghs_decompress
+ .text            000002b8+0003d4 __ghs_ind_crt0
+ .text            00000a40+000118 __ghs_ind_crt1
+                  00000000+000000 __ghs_init_r14
+                  00000000+000000 __ghs_init_r15
+                  00000000+000000 __ghs_init_r16
+                  00000000+000000 __ghs_init_r17
+                  00000000+000000 __ghs_init_r18
+                  00000000+000000 __ghs_init_r19
+                  00000000+000000 __ghs_init_r20
+                  00000000+000000 __ghs_init_r21
+                  00000000+000000 __ghs_init_r22
+                  00000000+000000 __ghs_init_r23
+ .syscall         00000e18+000008 __ghs_initial_dotsyscall
+                  00000002+000000 __ghs_log_fee_level
+                  00000000+000000 __ghs_manprf_init
+                  00000000+000000 __ghs_rambootcodeend
+                  00000000+000000 __ghs_rambootcodestart
+                  4000c000+000000 __ghs_ramend
+                  40000000+000000 __ghs_ramstart
+                  00000e68+000000 __ghs_rombootcodeend
+                  00000008+000000 __ghs_rombootcodestart
+                  00080000+000000 __ghs_romend
+                  00000000+000000 __ghs_romstart
+                  00000000+000000 __ghs_set_stack_chk_guard
+ .text            00000c0c+000048 __ghs_syscall
+ .text            00000c54+000054 __ghs_syscall64
+ .rchw            00000000+000000 __ghsautoimport_ghs_board_devices_resetvector
+ .text            00000ce4+000000 __ghsautoimport_ghs_board_memory_init
+ .fixaddr         00000e68+000000 __ghsbegin_fixaddr
+ .fixtype         00000e68+000000 __ghsbegin_fixtype
+                  00000000+000000 __ghsbegin_picbase
+                  00000000+000000 __ghsbegin_pidbase
+                  00000000+000000 __ghsbegin_robase
+ .sdabase         40000100+000000 __ghsbegin_sdabase
+ .sdata2          00000e20+000000 __ghsbegin_sdata2
+ .secinfo         00000e20+000000 __ghsbegin_secinfo
+ .secinfo         00000e38+000000 __ghsbinfo_aclear
+ .secinfo         00000e44+000000 __ghsbinfo_acopy
+ .secinfo         00000e20+000024 __ghsbinfo_clear
+ .secinfo         00000e5c+000000 __ghsbinfo_comacopy
+ .secinfo         00000e44+000024 __ghsbinfo_comcopy
+ .secinfo         00000e68+000000 __ghsbinfo_comtcopy
+ .secinfo         00000e44+000000 __ghsbinfo_copy
+ .secinfo         00000e44+000000 __ghsbinfo_tcopy
+ .secinfo         00000e44+000000 __ghseinfo_clear
+ .secinfo         00000e68+000000 __ghseinfo_comcopy
+ .secinfo         00000e44+000000 __ghseinfo_copy
+ .fixaddr         00000e68+000000 __ghsend_fixaddr
+ .stack           40003530+000000 __ghsend_stack
+                  00000000+000000 _cleanup
+ .text            00000b58+000068 _exit
+ .bss             40000104+000030 _multiArgs
+ .data            40000100+000004 _multibufSize
+ .bss             4000013c+0003e8 _multibuffer
+ .text            000002ac+000008 _multiend
+ .text            00000e04+000014 _restsmall_16
+ .text            00000df0+000014 _savesmall_16
+ .text            00000008+0000bc _start
+ .bss             40000134+000004 environ
+ .bss             40000138+000004 errno
+ .text            00000da0+000050 exit
+ .bss             40000524+000004 exitlisthead..C.3A.5CUsers.5Clenovo.2DT450.5CDocuments.5CMy.20Projects.5CMPC5634M_Demo.5Cobjs.5Cdebug.5Clibs.5Clibsys.5Cind_exit.
+ .text            0000013c+000048 initEMIOS
+ .text            000001d8+000054 initEMIOSch0
+ .text            0000022c+000054 initEMIOSch2
+ .text            00000184+000054 initEMIOSch23
+ .text            0000010c+000030 initSysclk
+ .text            00000280+00002c main
+ .text            00000840+000200 memcpy
+ .text            000007cc+000074 memset
+ .text            000002b4+000004 multiBreak
+ .text            000002ac+000000 multiCall
+                  00000000+000000 undefined_cleanup
+                  00000000+000000 undefined_cleanup_func

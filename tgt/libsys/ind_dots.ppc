@@ -1,0 +1,55 @@
+/*
+*
+*                Language Independent Library
+*
+*       Copyright 1983-2000 Green Hills Software,Inc.
+*
+*  This program is the property of Green Hills Software, Inc,
+*  its contents are proprietary information and no part of it
+*  is to be disclosed to anyone except employees of Green Hills
+*  Software, Inc., or as agreed in writing signed by the President
+*  of Green Hills Software, Inc.
+*
+*/
+/* ind_dots.ppc: .syscall section for PPC family */
+
+	.file	"ind_dots.ppc"
+#include "ppc_regs.ppc"
+
+#if defined(EMBEDDED) || defined(__OSE)
+
+	dtrace_stamp ind_dots.pcc
+
+#ifdef __vle
+	.section ".syscall", "vax"
+	.vle
+	.globl __dotsyscall
+__dotsyscall:
+	stack_entry
+	block_entry
+	se_nop
+	se_nop
+	stack_exit
+	se_blr
+
+#else /* __vle */
+	.section ".syscall", "ax"
+	.globl __dotsyscall
+__dotsyscall:
+	stack_entry
+	block_entry
+	nop			# will be replaced by loader/OS with sc
+	stack_exit
+	blr			# return to .text section
+#endif /* __vle */
+
+#ifdef __ELF
+	.fsize	0
+	.scall	__leaf__
+	.type __dotsyscall,@function
+	.size __dotsyscall,$-__dotsyscall
+
+	.weak	__ghs_initial_dotsyscall
+	.set	__ghs_initial_dotsyscall, __dotsyscall
+#endif /* __ELF */
+#endif	/* EMBEDDED || __OSE */

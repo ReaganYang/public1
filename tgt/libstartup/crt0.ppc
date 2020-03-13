@@ -1,0 +1,394 @@
+/*
+ *  Language Independent PPC Startup Module
+ *
+ *  Copyright 1983-2000
+ *  by Green Hills Software Inc.
+ *
+ *  This program is the property of Green Hills Software, Inc,
+ *  its contents are proprietary information and no part of it
+ *  is to be disclosed to anyone except employees of Green Hills
+ *  Software, Inc., or as agreed in writing signed by the President
+ *  of Green Hills Software, Inc.
+ */
+
+#include "indsyscl.h"
+
+	.file	"crt0.ppc"
+#include "ppc_regs.ppc"
+	.dtinst		/* This module doesn't get auto-dtrace instrumented */
+
+	.weak	__ghsend_stack
+	.weak	__ghsbegin_picbase
+	.weak	__ghsbegin_robase
+	.weak	__ghsbegin_pidbase
+	.weak	__ghsbegin_sdabase
+	.weak	__ghs_rambootcodestart
+	.weak	__ghs_rambootcodeend
+	.weak	__ghs_rombootcodestart
+	.weak	__ghs_rombootcodeend
+	.weak	__ghs_board_memory_init
+	.weak	__ghs_initial_dotsyscall
+#if defined(__PPC64_ABI__)
+#define	StackOff	48
+#define	StackOffLog2	 4
+#else
+#define	StackOff	16
+#define	StackOffLog2	 4
+#endif
+
+#ifdef __vle
+	.section ".vletext", "vax"
+	.vle
+
+	.globl _start
+_start:
+#if defined(__ghs_asm)
+	.need	exit
+	.need	__dotsyscall
+#endif
+
+	se_mr	r6, r5			# move r3, r4, and r5 up
+	se_mr	r5, r4			# to the syscall argument
+	se_mr	r4, r3			# registers r4, r5, and r6
+
+; initialize RAM if we're running from flash
+	e_lis	r7, %hiadj(__ghs_board_memory_init)
+	e_add2i. r7, %lo(__ghs_board_memory_init)
+	se_beq	memory_init_done
+	e_bl    __ghs_board_memory_init
+memory_init_done:
+
+	se_li	r3, SYSCALL_HELLO	# try a syscall
+	crclr	2
+#if !defined(__GHS_DTRACE_INSTRUMENTATION)
+#if defined(TRANSFER_VECTOR)
+	e_bl	%tv(__ghs_initial_dotsyscall)	# ''
+#else
+	e_bl	__ghs_initial_dotsyscall	# ''
+#endif
+#else
+	e_bcl	20,31, Lret		#sets LR
+#endif
+Lret:
+	se_mflr	r3			# (retain address of Lret)
+#if defined(__GHS_DTRACE_INSTRUMENTATION)
+	se_b	regs_okay
+#else
+	se_beq	regs_okay		# success, debugger is present
+#endif
+	e_lis	sp, %hiadj(__ghsend_stack-StackOff)	# else set SP
+	e_add16i sp, sp, %lo(__ghsend_stack-StackOff)	# ''
+	e_lis	r13, %hiadj(__ghsbegin_sdabase)	# SDA base register
+	e_add16i r13, r13, %lo(__ghsbegin_sdabase) # ''
+	se_li	r4, 0	# Clear argc, if debugger is not present
+	se_li	r5, 0	# Clear argv, if debugger is not present
+	se_li	r6, 0	# Clear envp, if debugger is not present
+regs_okay:
+	e_lis	r2, %hiadj(__ghsbegin_sdata2+0x8000)	# SDA2 base register
+	e_add16i r2, r2, %lo(__ghsbegin_sdata2+0x8000)	# ''	
+	e_lis	r0, %hiadj(Lret)	# adjust r2 for PIC mode
+	e_add16i r0, r0, %lo(Lret)	# ''
+	se_subf	r0, r3			# ''
+	e_lis	r10, %hiadj(__ghs_rombootcodestart)	# do not adjust r2 if
+	e_add2i. r10, %lo(__ghs_rombootcodestart) 	# we are in ROM code
+	se_bne	skip_adj				# and not in PIC mode
+	se_add	r2, r0			# ''
+skip_adj:
+	se_bgeni r7, 16			# r8 = 0x8000
+	add r13, r13, r7		# Adjust SDA base register
+	e_add16i r10, r0, %lo(regtab)
+	e_add2is r10, %hiadj(regtab)	# Point to reg init table
+	e_lwz	r14, 0(r10)		# (adjust for PIC or ROM execution)
+	e_lwz	r15, 4(r10)		# initialize some regs
+	e_lwz	r16, 8(r10)		# (for -globalreg support)
+	e_lwz	r17, 12(r10)		# ''
+	e_lwz	r18, 16(r10)		# ''
+	e_lwz	r19, 20(r10)		# ''
+	e_lwz	r20, 24(r10)		# ''
+	e_lwz	r21, 28(r10)		# ''
+	e_lwz	r22, 32(r10)		# ''
+	e_lwz	r23, 36(r10)		# ''
+
+	se_li	r7, 0			# terminate stack-trace chain
+	clrrwi	sp, sp, StackOffLog2	# n-byte align the stack
+	e_stwu	r7, -StackOff(sp)	# leave room for argv
+#if defined(__ALTIVEC__)
+	e_mtspr	VRSAVE, r10 		# VRSAVE should be 0 by default
+#endif
+	e_add16i r3, r3, %lo(baseptrs-Lret) # load address of baseptrs array
+	e_add2is r3, %hiadj(baseptrs-Lret) # ''
+#if defined(TRANSFER_VECTOR)
+	e_b	%tv(__ghs_ind_crt0)	# go to C language code
+#else
+	e_b	__ghs_ind_crt0		# go to C language code
+#endif
+	.align 2			# regtab and baseptrs need alignment
+#else /* __vle */
+	.text
+	
+#if defined(__PPC64_ABI__)
+	.section ".opd", "aw"
+	.align 	3
+	.global	_start
+_start:
+	.quad	._start, .TOC.@tocbase, 0
+	.size	_start, 24
+	.text
+	.globl ._start
+._start:
+#else  /* !defined(__PPC64_ABI__) */
+	.globl _start
+_start:
+#endif /* !defined(__PPC64_ABI__) */	
+#if defined(__ghs_asm)
+	.need	exit
+	.need	__dotsyscall
+#endif
+
+	mr	r6, r5			# move r3, r4, and r5 up
+	mr	r5, r4			# to the syscall argument
+	mr	r4, r3			# registers r4, r5, and r6
+
+; initialize RAM if we're running from flash
+#if defined(__PPC64__)
+	lis	r11, %highesta(__ghs_board_memory_init)
+	ori     r11, r11, %highera(__ghs_board_memory_init)
+	sldi    r11, r11, 32
+	oris    r11, r11, %hiadj(__ghs_board_memory_init)
+	addic.  r11, r11, %lo(__ghs_board_memory_init)
+#else
+	lis	r11, %hiadj(__ghs_board_memory_init)
+	addic.  r11, r11, %lo(__ghs_board_memory_init)
+#endif /* PPC64 */
+	beq     memory_init_done
+; this call does nothing if __ghs_board_memory_init doesn't exist.
+	bl      __ghs_board_memory_init	
+memory_init_done:
+
+	li	r3, SYSCALL_HELLO	# try a syscall
+	crclr	2
+#if !defined(__GHS_DTRACE_INSTRUMENTATION)
+#if defined(TRANSFER_VECTOR)
+	bl	%tv(__ghs_initial_dotsyscall)	# ''
+#else
+	bl	__ghs_initial_dotsyscall	# ''
+#endif
+#else
+	bcl	20,31, Lret		# sets LR
+#endif
+Lret:
+	mflr	r12			# (retain address of Lret)
+#if defined(__GHS_DTRACE_INSTRUMENTATION)
+	b regs_okay
+#else
+	beq	regs_okay		# success, debugger is present
+#endif
+#if defined(__PPC64__)
+	lis     sp, %highesta(__ghsend_stack-StackOff)
+	ori     sp, sp, %highera(__ghsend_stack-StackOff)
+	sldi    sp, sp, 32
+	oris    sp, sp, %hiadj(__ghsend_stack-StackOff)
+	addi    sp, sp, %lo(__ghsend_stack-StackOff)
+#else
+	lis	sp, %hiadj(__ghsend_stack-StackOff)	# else set SP
+	addi	sp, sp, %lo(__ghsend_stack-StackOff)	# ''
+#endif /* PPC64 */
+
+#ifdef __PPC64__
+	lis     r13, %highesta(__ghsbegin_sdabase)
+	ori     r13, r13, %highera(__ghsbegin_sdabase)
+	sldi    r13, r13, 32
+	oris    r13, r13, %hiadj(__ghsbegin_sdabase)
+	addi     r13, r13, %lo(__ghsbegin_sdabase)
+#else
+	lis	r13, %hiadj(__ghsbegin_sdabase)	# SDA base register
+	addi	r13, r13, %lo(__ghsbegin_sdabase) # ''
+#endif
+	li	r4, 0	# Clear argc, if debugger is not present
+	li	r5, 0	# Clear argv, if debugger is not present
+	li	r6, 0	# Clear envp, if debugger is not present
+regs_okay:
+
+#ifdef __PPC64__
+# if defined(__PPC64_ABI__)
+	lis     r2, %highesta(__ghsbegin_toc+0x8000)
+	ori     r2, r2, %highera(__ghsbegin_toc+0x8000)
+	sldi    r2, r2, 32
+	oris    r2, r2, %hiadj(__ghsbegin_toc+0x8000)
+	addi    r2, r2, %lo(__ghsbegin_toc+0x8000)
+# else
+	lis     r2, %highesta(__ghsbegin_sdata2+0x8000)
+	ori     r2, r2, %highera(__ghsbegin_sdata2+0x8000)
+	sldi    r2, r2, 32
+	oris    r2, r2, %hiadj(__ghsbegin_sdata2+0x8000)
+	addi     r2, r2, %lo(__ghsbegin_sdata2+0x8000)
+# endif
+#else
+	lis	r2, %hiadj(__ghsbegin_sdata2+0x8000)	# SDA2 base register
+	addi	r2, r2, %lo(__ghsbegin_sdata2+0x8000)	# ''	
+#endif
+
+#ifdef __PPC64__
+	lis     r11, %highesta(Lret)
+	ori     r11, r11, %highera(Lret)
+	sldi    r11, r11, 32
+	oris    r11, r11, %hiadj(Lret)
+	addi     r11, r11, %lo(Lret)
+#else
+	lis	r11, %hiadj(Lret)	# adjust r2 for PIC mode
+	addi	r11, r11, %lo(Lret)	# ''
+#endif
+	subfc	r11, r11, r12		# ''	
+
+#ifdef __PPC64__
+	lis     r10, %highesta(__ghs_rombootcodestart)
+	ori     r10, r10, %highera(__ghs_rombootcodestart)
+	sldi    r10, r10, 32
+	oris    r10, r10, %hiadj(__ghs_rombootcodestart)
+	addic.  r10, r10, %lo(__ghs_rombootcodestart)
+#else
+	lis	r10, %hiadj(__ghs_rombootcodestart)	# do not adjust r2 if
+	addic.	r10, r10, %lo(__ghs_rombootcodestart) 	# we are in ROM code
+#endif
+
+	bne	skip_adj				# and not in PIC mode
+	add	r2, r2, r11		# ''
+skip_adj:
+	addi	r13, r13, 0x4000	# Adjust SDA base register
+	addi	r13, r13, 0x4000	# ''
+#ifdef __PPC64__
+	lis	r10, %highesta(regtab)
+	ori	r10, r10, %highera(regtab)
+	sldi	r10, r10, 32
+	oris	r10, r10, %hiadj(regtab)
+	add	r10, r10, r11
+	ldu	r14, %lo(regtab)(r10)	# (adjust for PIC or ROM execution)
+	ld	r15, 8(r10)		# initialize some regs
+	ld	r16, 16(r10)		# (for -globalreg support)
+	ld	r17, 24(r10)		# ''
+	ld	r18, 32(r10)		# ''
+	ld	r19, 40(r10)		# ''
+	ld	r20, 48(r10)		# ''
+	ld	r21, 56(r10)		# ''
+	ld	r22, 64(r10)		# ''
+	ld	r23, 72(r10)		# ''
+#else
+	addis	r10, r11, %hiadj(regtab)	# Point to reg init table
+	lwzu	r14, %lo(regtab)(r10)	# (adjust for PIC or ROM execution)
+	lwz	r15, 4(r10)		# initialize some regs
+	lwz	r16, 8(r10)		# (for -globalreg support)
+	lwz	r17, 12(r10)		# ''
+	lwz	r18, 16(r10)		# ''
+	lwz	r19, 20(r10)		# ''
+	lwz	r20, 24(r10)		# ''
+	lwz	r21, 28(r10)		# ''
+	lwz	r22, 32(r10)		# ''
+	lwz	r23, 36(r10)		# ''
+#endif
+
+	li	r10, 0			# terminate stack-trace chain
+#ifdef __PPC64__
+/* [jy] the original code used this instruction for non-AltiVec PPC64 */
+/*	clrrwi	sp, sp, 3		# 8 byte align the stack	*/
+	clrrdi  sp, sp, StackOffLog2
+	stdu    r10, -StackOff(sp)
+#else
+	clrrwi	sp, sp, StackOffLog2		# 16 byte align the stack
+	stwu	r10, -StackOff(sp)		# leave room for argv
+#endif
+
+#if defined(__ALTIVEC__)
+	mtspr	VRSAVE, r10 		# VRSAVE should be 0 by default
+#endif
+
+#ifdef __PPC64__
+	lis     r3, %highesta(baseptrs-Lret)
+	ori     r3, r3, %highera(baseptrs-Lret)
+	sldi    r3, r3, 32
+	oris    r3, r3, %hiadj(baseptrs-Lret)
+	addi    r3, r3, %lo(baseptrs-Lret)
+	add    r3, r3, r12
+#else
+	addis	r3, r12, %hiadj(baseptrs-Lret) # load address of baseptrs array
+	addi	r3, r3, %lo(baseptrs-Lret) # ''
+#endif
+	
+#if defined(TRANSFER_VECTOR)
+	b	%tv(__ghs_ind_crt0)	# go to C language code
+#else
+	b	__ghs_ind_crt0		# go to C language code
+#endif
+#endif /* __vle */
+#if defined(__ELF)
+	.fsize 	StackOff
+	.scall	__dotsyscall
+	.scall	__ghs_ind_crt0
+#ifdef __PPC64_ABI__
+	.type 	._start, @function
+	.size	._start, $-._start
+#else
+	.type	_start,@function
+	.size	_start,$-_start
+#endif /* PPC64 */
+#endif /* ELF */
+
+/* Table for initializing registers, for -globalreg support.
+ * If no initialized global regs are used these values will be 0
+ */
+#ifdef __PPC64__
+        .align 3
+regtab:
+	.weak	__ghs_init_r14, __ghs_init_r15
+	.quad	__ghs_init_r14, __ghs_init_r15
+	.weak	__ghs_init_r16, __ghs_init_r17
+	.quad	__ghs_init_r16, __ghs_init_r17
+	.weak	__ghs_init_r18, __ghs_init_r19
+	.quad	__ghs_init_r18, __ghs_init_r19
+	.weak	__ghs_init_r20, __ghs_init_r21
+	.quad	__ghs_init_r20, __ghs_init_r21
+	.weak	__ghs_init_r22, __ghs_init_r23
+	.quad	__ghs_init_r22, __ghs_init_r23
+#else
+        .align 2
+regtab:
+	.weak	__ghs_init_r14, __ghs_init_r15
+	.long	__ghs_init_r14, __ghs_init_r15
+	.weak	__ghs_init_r16, __ghs_init_r17
+	.long	__ghs_init_r16, __ghs_init_r17
+	.weak	__ghs_init_r18, __ghs_init_r19
+	.long	__ghs_init_r18, __ghs_init_r19
+	.weak	__ghs_init_r20, __ghs_init_r21
+	.long	__ghs_init_r20, __ghs_init_r21
+	.weak	__ghs_init_r22, __ghs_init_r23
+	.long	__ghs_init_r22, __ghs_init_r23
+#endif
+	.type regtab, @object
+	.size regtab, .-regtab
+
+baseptrs:
+#ifdef __PPC64__
+	.quad   1    /* baseptrs version number */
+	.quad	__ghsbegin_picbase
+	.quad	__ghsbegin_robase
+	.quad	__ghsbegin_pidbase
+	.quad	__ghs_rambootcodestart
+	.quad	__ghs_rambootcodeend
+	.quad	__ghs_rombootcodestart
+	.quad	__ghs_rombootcodeend
+#else
+	.long   1    /* baseptrs version number */
+	.long	__ghsbegin_picbase
+	.long	__ghsbegin_robase
+	.long	__ghsbegin_pidbase
+	.long	__ghs_rambootcodestart
+	.long	__ghs_rambootcodeend
+	.long	__ghs_rombootcodestart
+	.long	__ghs_rombootcodeend
+#endif
+	.type baseptrs, @object
+	.size baseptrs, .-baseptrs
+
+/* this section directive is NEEDED.  It causes secinfo to be a 
+ * readonly section which ind_crt0.c may require for proper operation */
+	.section ".secinfo", "a"
+

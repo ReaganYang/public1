@@ -1,0 +1,117 @@
+/*
+*
+*                Language Independent Library
+*
+*       Copyright 1983-2000 Green Hills Software,Inc.
+*
+*  This program is the property of Green Hills Software, Inc,
+*  its contents are proprietary information and no part of it
+*  is to be disclosed to anyone except employees of Green Hills
+*  Software, Inc., or as agreed in writing signed by the President
+*  of Green Hills Software, Inc.
+*
+*/
+/* ind_reset.ppc: .reset section for PPC family */
+
+/* Reset vector: jumps to _start */
+
+	.file	"ind_reset.ppc"
+#include "ppc_regs.ppc"
+
+#ifdef EMBEDDED
+
+#ifdef __vle
+	.section ".reset", "vax"
+	.vle
+#else
+	.section ".reset", "ax"
+#endif /* ELF */
+
+/******************************************************************************\
+ * Load Word With Address
+ *      This macro loads register 'reg' with the address of the symbol 'sym'.
+\******************************************************************************/
+.macro  laddr   reg, sym
+#ifdef __vle
+        e_lis    reg, %hiadj(sym)
+        e_add16i reg, reg, %lo(sym)
+#else	/* __vle */
+        lis      reg, %hi(sym)
+        ori      reg, reg, %lo(sym)
+#endif	/* __vle */
+.endm
+
+	.weak __ghs_rambootcodestart
+	.weak __ghs_rombootcodestart
+
+/******************************************************************************\
+ * Load Word With ROM Address
+ *      This macro loads register 'reg' with the address of the symbol 'sym'.
+ *      In the case that the symbol is coppied from ROM to RAM, this loads
+ *      the ROM address of the symbol.
+ *      This assumes that ROM is always locate at a higher address than RAM.
+\******************************************************************************/
+.macro	lromaddr  reg, sym, ramstart, romstart
+	laddr	reg, sym
+#ifdef __vle
+	se_cmpl romstart, reg
+	se_ble  done
+	se_add	reg, romstart
+	se_sub	reg, ramstart
+#else	/* __vle */
+	cmplw   romstart, reg
+	ble     done
+	add	reg, reg, romstart
+	subfc	reg, ramstart, reg
+#endif	/* __vle */
+done:
+.endm
+
+/******************************************************************************\
+ * __ghs_reset_handler
+\******************************************************************************/
+
+	.globl  __ghs_reset_handler
+__ghs_reset_handler:
+#ifdef __vle
+	se_bmaski r24,0                       # Prevent decrementer
+	mtdec   r24                           # interrupt for a while
+#ifdef __SPE__
+	mfmsr   r24
+	se_bseti r24, 6                       # Enable MSR[SPE]
+	mtmsr   r24
+#endif
+
+	laddr   r24, __ghs_rambootcodestart
+	laddr   r25, __ghs_rombootcodestart
+
+	lromaddr r26, _start, r24, r25 
+
+	se_mtctr   r26
+	se_bctrl
+#else	/* __vle */
+	orc     r24,r24,r24                     # Prevent decrementer
+	mtdec   r24                             # interrupt for a while
+#ifdef __SPE__
+	mfmsr   r24
+	oris    r24, r24, 0x0200                # Enable MSR[SPE]
+	mtmsr   r24
+#endif
+
+	laddr   r24, __ghs_rambootcodestart
+	laddr   r25, __ghs_rombootcodestart
+
+	lromaddr r26, _start, r24, r25 
+
+	mtctr   r26
+	bctrl
+#endif	/* __vle */
+
+#ifdef __ELF
+	.fsize	0
+	.scall	_start
+	.type __ghs_reset_handler,@function
+	.size __ghs_reset_handler,$-__ghs_reset_handler
+#endif /* __ELF */
+#endif  /* EMBEDDED */
+

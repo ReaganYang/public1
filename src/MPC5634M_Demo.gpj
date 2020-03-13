@@ -1,0 +1,14 @@
+#!gbuild
+[Program]
+	-object_dir=${%option_value(-object_dir)}/MPC5634M_Demo
+	-startfile_dir=${%expand_path(.)}
+	-L${%expand_path(./libstartup)}
+	-lstartup
+	-L${%expand_path(./libsys)}
+	-lsys
+	-L${%expand_path(./libboardinit)}
+	-lboardinit
+main.c
+mpc563m.h
+typedefs.h
+tgt\standalone_romrun.ld

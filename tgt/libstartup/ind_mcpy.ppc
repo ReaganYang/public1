@@ -1,0 +1,670 @@
+/*
+		    ANSI C Runtime Library
+	
+	Copyright 1983-2003 Green Hills Software, Inc.
+
+    This program is the property of Green Hills Software, Inc,
+    its contents are proprietary information and no part of it
+    is to be disclosed to anyone except employees of Green Hills
+    Software, Inc., or as agreed in writing signed by the President
+    of Green Hills Software, Inc.
+*/
+
+	.file	"ind_mcpy.ppc"
+
+#define USES_SPE
+#include "ppc_regs.ppc"
+
+#if defined(__REG_BIT) && __REG_BIT == 64
+#define cmpli cmpldi
+#else
+#define cmpli cmplwi
+#endif
+
+#ifdef	__vle
+	.section ".vletext", "vax"
+	.vle
+	; r3=dest, r4=src, r8=len
+memcpy::
+	ghs_log_prologue memcpy
+	se_mtar	r8, r5
+	e_cmpli	cr1,r8,7		; cr1 = compare r8 with 7
+
+	; Adjust source and destination for update. Use r7 for destination,
+	; because r3 must be preserved as the return value.
+
+	e_subi	r7,r3,4			; r7 = r3 - 4
+	se_subi	r4,4			; r4  = r4 - 4
+
+	; If the length is less than 7, just do a byte copy. If the source
+	; and/or destination are misaligned, handle this out-of-line.
+
+	e_andi.	r6,r7,3			; r6.= r7 & 3
+	e_blt	cr1,byte_copy		; if (len < 7) goto byte_copy
+	se_bne	dest_misaligned		; Destination is misaligned
+	e_andi.	r10,r4,3		; r10. = r4 & 3
+	se_bne	src_misaligned		; Source is misaligned
+
+word_aligned:
+
+	; Source and destination are both word aligned and adjusted for update.
+
+#ifdef __SPE__
+
+	; If signal processing extensions (SPE) are available and both
+	; the source and destination are relatively 8-byte aligned and
+	; we have at least 36 bytes to copy, then use the 64-bit SPE
+	; registers to accomplish this copy.
+
+	xor	r11,r4,r7		; r11 = r4 ^ r7
+	e_cmpli	cr1,r8,36		; Compare copy length with 36
+	e_andi.	r10,r11,7		; r10. = (r4 ^ r7) & 7
+	e_blt	cr1,not_64		; Too short!
+	se_bne	not_64			; Not relatively 8-byte aligned
+
+	; Source and destination are relatively 8-byte aligned, and
+	; absolutely word (4-byte) aligned. Make them absolutely 8-byte
+	; aligned.
+
+	e_andi.	r10,r4,4		; r10. = r4 & 4
+	se_bne	10f			; Skip if now 8-byte aligned
+	e_subi	r8,r8,4			; r8  -= 4
+	e_lwzu	r6,4(r4)		; Load  r6 and update r4
+	e_stwu	r6,4(r7)		; Store r6 and update r7
+10:	se_addi	r4,4			; r4  += 4
+	se_addi	r7,4			; r7 += 4
+	e_srwi	r0,r8,5			; r0  = r8 >> 5		(div by 32)
+	e_andi.	r8,r8,31		; r8  = r8 & 31
+	se_mtctr r0			; ctr = r0
+
+	; Copy 32 bytes at a time.
+
+20:	evldd	r6, 0(r4)		; Load r6
+	evldd	r0, 8(r4)		; Load r0
+	evldd	r5,16(r4)		; Load r5
+	evldd	r9,24(r4)		; Load r9
+	se_addi	r4,32			; r4 += 32
+	evstdd	r6, 0(r7)		; Store r6
+	evstdd	r0, 8(r7)		; Store r0
+	evstdd	r5,16(r7)		; Store r5
+	evstdd	r9,24(r7)		; Store r9
+	se_addi	r7,32			; r7 += 32
+	e_bdnz	20b
+	se_beq	done			; if (r8 == 0) return
+
+	; Use non-SPE instructions to complete the copy.
+
+	se_subi	r4,4			; r4  -= 4
+	se_subi	r7,4			; r7 -= 4	
+
+/*--------------------------------------------------------------------------*/
+
+not_64:
+
+#endif
+
+#ifndef DONT_NEED_UNROLLED_WORD
+	e_srwi.	r6,r8,4			; r6. = r8 / 16
+	se_beq	word_copy		; if (len < 16) goto word_copy
+	se_mtctr r6			; ctr = r6
+	e_andi.	r8,r8,15		; r8  = r8 & 15
+
+	; Load words
+10:	se_lwz	r6, 4(r4)		; Load r6
+	se_lwz	r0, 8(r4)		; Load r0
+	se_lwz	r5,12(r4)		; Load r5
+	e_lwzu	r9,16(r4)		; Load r9 and update r4
+
+	; Store words
+	se_stw	r6, 4(r7)		; Store r6
+	se_stw	r0, 8(r7)		; Store r0
+	se_stw	r5,12(r7)		; Store r5
+	e_stwu	r9,16(r7)		; Store r9 and update r7
+
+	; End loop
+	e_bdnz	10b			; loop while --counter != 0
+	se_beq	done			; if (r8 == 0) return
+#endif
+
+word_copy:
+
+	e_srwi.	r6,r8,2			; r6  = r8 / 4
+	se_beq	byte_copy		; This is unlikely
+	
+	; Copy 4 bytes at a time.
+
+	se_mtctr r6			; ctr = r6
+	e_andi.	r8,r8,3			; No more than 3 bytes will remain
+20:	e_lwzu	r6,4(r4)		; Load  r6 and update r4
+	e_stwu	r6,4(r7)		; Store r6 and update r7
+	e_bdnz	20b			; loop while --counter != 0
+	se_beq	done			; if (r8 == 0) return
+
+byte_copy:
+	e_cmpli	r8,0			; Compare r8 with zero
+	se_addi	r7,4			; r7 += 4
+	se_addi	r4,4			; r4  += 4
+	se_beq	done			; if (r8 == 0) return
+byte_aligned:
+	se_mfar	r5, r8
+	se_mtctr r5
+30:	se_subi	r5, 1			; Update index (r8)
+	lbzx	r6, r5, r4		; Load  r6
+	stbx	r6, r5, r7		; Store r6
+	e_bdnz	30b			; loop while --counter != 0
+	ghs_log_epilogue memcpy
+done:	se_blr				; return r3
+
+/*--------------------------------------------------------------------------*/
+
+dest_misaligned:
+
+	; r6 is non-zero and contains the least significant two bits of the
+	; destination address. Using this information, copy enough data
+	; to get the destination word aligned.
+
+	e_subfic. r5, r6, 2		; cr0 = compare 2 with alignment in r6
+	se_addi r5, 2			; r5 = 4 - r6
+	se_beq	copy_2			; if (r6 == 2) goto copy_2
+	se_blt	copy_1			; if (r6 == 3) goto copy_1
+	se_lbz	r6,6(r4)		; Load  r6
+	se_stb	r6,6(r7)		; Store r6
+copy_2:	se_lbz	r6,5(r4)		; Load  r6
+	se_stb	r6,5(r7)		; Store r6
+copy_1:	se_lbz	r6,4(r4)		; Load  r6
+	se_stb	r6,4(r7)		; Store r6
+	se_add	r4,r5			; r4 += r5
+	subf	r8,r5,r8		; r8 -= r5
+	se_add	r7,r5			; r7 += r5
+
+	; Destination is word aligned. If source is now also word aligned,
+	; use fast copy.
+
+	e_andi.	r10,r4,3		; r10. = r4 & 3
+	se_beq	word_aligned		; Best-case alignment
+
+src_misaligned:
+
+	; r10 is non-zero and contains the least significant two bits of the
+	; source address. Using this information, calculate the bit-shift
+	; amount and mask. Also calculate the loop counter (ctr) and
+	; remainder (r8).
+
+	e_srwi	r6,r8,2			; r6  = r8 / 4
+	e_slwi	r11,r10,3		; r11 = number bits to shift
+	e_li	r12,-1			; r12 = ~0
+	se_mtctr r6			; ctr = r6
+	slw	r12,r12,r11		; r12 = ~0 << N
+	e_subfic. r6, r10, 2
+	subf	r4,r10,r4		; r4 is now word aligned
+	se_beq  prime_2
+	se_li   r6,0
+	se_blt  prime_1
+	se_lbz  r6,5(r4)
+#ifdef __BigEndian
+	se_slwi r6,16
+prime_2:se_lbz  r5,6(r4)
+	e_rlwimi r6,r5,8,16,23
+prime_1:se_lbz  r5,7(r4)
+	se_or   r6,r5
+	se_addi r4,4
+	slw	r6,r6,r11		; Rotate into position
+#else
+	se_slwi r6,8
+prime_2:se_lbz  r5,6(r4)
+	e_rlwimi r6,r5,16,8,15
+prime_1:se_lbz  r5,7(r4)
+	e_rlwimi r6,r5,24,0,7
+	se_addi r4,4
+	se_srw	r6,r11
+	e_subfic r11,r11,32		; r11 = 32 - r11
+	rotlw	r12,r12,r11		; Correct for little endian mode
+#endif
+	e_bdz   final
+40:
+	and	r0,r6,r12		; Mask out next iteration's data
+	e_lwzu	r5,4(r4)		; Get the rest of this iteration
+	rotlw	r6,r5,r11		; Rotate into position
+	andc	r5,r6,r12		; Mask out next iteration's data
+	se_or	r0,r5			; Combine the two fragments
+	e_stwu	r0,4(r7)		; Store
+	e_bdnz	40b			; loop while --counter != 0
+
+final:	and	r6,r6,r12		; Mask out next iteration's data
+	se_li   r5,0
+	se_beq  final_2
+	se_bgt  final_1
+	se_lbz  r5,6(r4)
+#ifdef __BigEndian
+	se_slwi r5,8
+final_2:se_lbz  r0,5(r4)
+	e_rlwimi r5,r0,16,8,15
+final_1:e_lbzu  r0,4(r4)
+	e_andi.	r8,r8,3			; r8  = r8 % 4
+	e_rlwimi r5,r0,24,0,7
+	rotlw	r5,r5,r11		; Rotate into position
+#else
+	se_slwi r5,16
+final_2:se_lbz  r0,5(r4)
+	e_rlwimi r5,r0,8,16,23
+final_1:e_lbzu  r0,4(r4)
+	e_andi.	r8,r8,3			; r8  = r8 % 4
+	se_or   r5, r0
+	slw	r5,r5,r11		; Rotate into position
+#endif
+	se_or	r6,r5			; Combine the two fragments
+	se_stw	r6,4(r7)		; Store
+	
+	se_beq	done			; if (r8 == 0) return
+
+	se_addi	r7,8			; r7 += 8
+	add	r4,r4,r10		; r4  += r10
+	se_b	byte_aligned		; Copy the last (up to) 3 bytes
+
+/*--------------------------------------------------------------------------*/
+#else	/* __vle */
+	.text
+	; r3=dest, r4=src, r8=len
+# if defined(__PPC64_ABI__) && !defined(__PPC64_NO_FUNC_DESC)
+	.section ".opd", "aw"
+	.align 3
+	.globl memcpy
+memcpy:
+	.quad .memcpy, .TOC.@tocbase, 0
+	.size memcpy, 24
+	
+	.text 
+	.align 2
+	.globl .memcpy
+.memcpy:
+# else
+memcpy::
+# endif
+	ghs_log_prologue memcpy
+
+; AltiVec version is disabled by default because AltiVec loads and stores to
+; cache-inhibited memory regions take alignment exceptions.  Define
+; _NO_CACHE_INHIBITED_MEMORY and build with custom startup libraries to
+; activate AltiVec memcpy.  AltiVec memcpy is significantly faster.
+; The AltiVec version here also may read and write beyond the beginning and end
+; of the source and destination memory, possibly producing unintended
+; accesses to volatile memory.
+#if defined(_NO_CACHE_INHIBITED_MEMORY) && defined(__ALTIVEC__)
+	; If AltiVec extensions are available and we're copying 31 or more
+	; bytes, then use AltiVec loads and stores.  If the source and
+	; destination are 16-byte relatively aligned then we can use a simple
+	; lvx/stv unrolled loop, otherwise we use a loop that performs
+	; permute's to acomplish unaligned loads.
+
+	; to reduce size, we don't really need the unrolled word-by-word
+	; loops because we'll be using AltiVec for larger items
+#define DONT_NEED_UNROLLED_WORD 1
+
+	cmpli	r5, 31
+	blt	too_small_for_altivec	; if (len < 31) skip altivec
+	
+	mr	r10,r3			; r10 = r3
+	andi.	r7, r10,15		; check if dest is 16-byte aligned
+	beq	dest_aligned		; skip fixup loop if already aligned
+
+	; Byte-by-byte copy to adjust destination to 16-byte alignment
+	
+	subfic	r7, r7, 16		; r7 = number of bytes to be copied
+	mtctr	r7
+#ifdef __rs6000c
+	subfc	r5, r7, r5		; adjust length of copy for fixup
+#else
+	subf	r5, r7, r5		; adjust length of copy for fixup
+#endif
+10:	lbz	r6, 0(r4)		; Load  r6
+	addi	r4, r4, 1		; Increment r4
+	stb	r6, 0(r10)		; Store r6
+	addi    r10,r10,1		; Increment r10
+	bdnz    10b
+
+dest_aligned:				; Dest is now 16-byte aligned
+        andi.	r6, r4, 15		; is source 16-byte aligned?
+	mfspr   r0, VRSAVE
+        srwi    r7, r5, 4               ; r7  = r5 >> 4         (div by 16)
+	oris    r6, r0, 61440		; indicate v0-v3 used in VRSAVE
+        mtctr   r7                      ; ctr = r7
+	mtspr	VRSAVE, r6
+	bne	altivec_unaligned	; if source unaligned, use other loop
+
+	; Perform fully aligned copy.  Source is now 16-byte aligned.
+	
+	andi.	r5, r5, 15		; r5. = r5 & 63
+
+        ; Copy 16 bytes at a time.
+20:     lvx     v0, r0, r4              ; v0 = [r4]
+        addi    r4, r4, 16              ; r4 += 16
+        stvx    v0, r0, r10             ; [r10] = v0
+        addi    r10,r10,16              ; r10 += 16
+        bdnz    20b
+	mtspr   VRSAVE, r0
+	ghs_log_cond_ret memcpy_cr1, bne
+	beqlr-				; if (r5 == 0) return
+	subi	r4, r4, 4
+	subi	r10,r10,4
+	b	word_copy
+
+/*--------------------------------------------------------------------------*/
+
+	; Perform unaligned copy.  Source is not 16-byte aligned.
+	
+altivec_unaligned:	
+	andi.	r5, r5, 15		; r5. = r5 & 15
+	lvx	v1, r0, r4		; prime the loop
+#ifdef __BigEndian
+	lvsl	v2, r0, r4		; v2 = permutation vector
+#else
+	lvsr	v2, r0, r4
+#endif
+	li    	r6, 16			; adjust for priming of loop
+
+        ; Copy 16 bytes at a time.
+30:	lvx	v0, r6, r4		; v0 = [r4+16]
+	addi	r4, r4, 16		; r4 += 16
+#ifdef __BigEndian
+	vperm	v3, v1, v0, v2		; v3 = part of v1 and v0
+#else
+	vperm	v3, v0, v1 ,v2
+#endif
+	vmr	v1, v0			; v1 = v0
+	stvx	v3, r0, r10		; [r10] = v3
+	addi	r10,r10,16		; r10 += 16
+	bdnz	30b
+	mtspr   VRSAVE, r0
+	ghs_log_cond_ret memcpy_cr2, bne
+	beqlr-				; if (r5 == 0) return
+	b	byte_aligned
+
+/*--------------------------------------------------------------------------*/
+
+too_small_for_altivec:
+#endif
+
+	cmpli	cr5,r5,7		; cr5 = compare r5 with 7
+
+	; Adjust source and destination for update. Use r10 for destination,
+	; because r3 must be preserved as the return value.
+
+	subi	r10,r3,4		; r10 = r3 - 4
+	subi	r4, r4,4		; r4  = r4 - 4
+
+	; If the length is less than 7, just do a byte copy. If the source
+	; and/or destination are misaligned, handle this out-of-line.
+
+	andi.	r11,r10,3		; r11.= r10 & 3
+	blt-	cr5,byte_copy		; if (len < 7) goto byte_copy
+	bne-	dest_misaligned		; Destination is misaligned
+	andi.	r0,r4,3			; r0. = r4 & 3
+	bne-	src_misaligned		; Source is misaligned
+
+word_aligned:
+
+	; Source and destination are both word aligned and adjusted for update.
+
+#ifdef __SPE__
+
+	; If signal processing extensions (SPE) are available and both
+	; the source and destination are relatively 8-byte aligned and
+	; we have at least 36 bytes to copy, then use the 64-bit SPE
+	; registers to accomplish this copy.
+
+	xor	r11,r4,r10		; r11 = r4 ^ r10
+	cmpli	cr1,r5,36		; Compare copy length with 36
+	andi.	r0,r11,7		; r0. = (r4 ^ r10) & 7
+	blt	cr1,not_64		; Too short!
+	bne	not_64			; Not relatively 8-byte aligned
+
+	; Source and destination are relatively 8-byte aligned, and
+	; absolutely word (4-byte) aligned. Make them absolutely 8-byte
+	; aligned.
+
+	andi.	r0,r4,4			; r0. = r4 & 4
+	bne	10f			; Skip if now 8-byte aligned
+	subi	r5,r5,4			; r5  -= 4
+	lwzu	r6,4(r4)		; Load  r6 and update r4
+	stwu	r6,4(r10)		; Store r6 and update r10
+10:	addi	r4,r4,4			; r4  += 4
+	addi	r10,r10,4		; r10 += 4
+	srwi	r7,r5,5			; r7  = r5 >> 5		(div by 32)
+	andi.	r5,r5,31		; r5  = r5 & 31
+	mtctr	r7			; ctr = r7
+
+	; Copy 32 bytes at a time.
+
+20:	evldd	r6, 0(r4)		; Load r6
+	evldd	r7, 8(r4)		; Load r7
+	evldd	r8,16(r4)		; Load r8
+	evldd	r9,24(r4)		; Load r9
+	addi	r4,r4,32		; r4 += 32
+	evstdd	r6, 0(r10)		; Store r6
+	evstdd	r7, 8(r10)		; Store r7
+	evstdd	r8,16(r10)		; Store r8
+	evstdd	r9,24(r10)		; Store r9
+	addi	r10,r10,32		; r10 += 32
+	bdnz	20b
+	ghs_log_cond_ret memcpy_cr3, bne
+	beqlr				; if (r5 == 0) return
+
+	; Use non-SPE instructions to complete the copy.
+
+	subi	r4,r4,4			; r4  -= 4
+	subi	r10,r10,4		; r10 -= 4	
+
+/*--------------------------------------------------------------------------*/
+
+not_64:
+
+#endif
+
+#ifndef DONT_NEED_UNROLLED_WORD
+#ifdef __PPC64__
+	srdi.   r6,r5,4
+#else
+	srwi.	r6,r5,4			; r6. = r5 / 16
+#endif
+	beq	word_copy		; if (len < 16) goto word_copy
+	mtctr	r6			; ctr = r6
+	andi.	r5,r5,15		; r5  = r5 & 15
+
+	; Load words
+10:	lwz	r6, 4(r4)		; Load r6
+	lwz	r7, 8(r4)		; Load r7
+	lwz	r8,12(r4)		; Load r8
+	lwzu	r9,16(r4)		; Load r9 and update r4
+
+	; Store words
+	stw	r6, 4(r10)		; Store r6
+	stw	r7, 8(r10)		; Store r7
+	stw	r8,12(r10)		; Store r8
+	stwu	r9,16(r10)		; Store r9 and update r10
+
+	; End loop
+	bdnz+	10b			; loop while --counter != 0
+	ghs_log_cond_ret memcpy_cr4, bne
+	beqlr+				; if (r5 == 0) return
+#endif
+
+word_copy:
+
+#ifdef __PPC64__
+	srdi.   r6,r5,2
+#else
+	srwi.	r6,r5,2			; r6  = r5 / 4
+#endif
+	beq-	byte_copy		; This is unlikely
+	
+	; Copy 4 bytes at a time.
+
+	mtctr	r6			; ctr = r6
+	andi.	r5,r5,3			; No more than 3 bytes will remain
+20:	lwzu	r6,4(r4)		; Load  r6 and update r4
+	stwu	r6,4(r10)		; Store r6 and update r10
+	bdnz	20b			; loop while --counter != 0
+	ghs_log_cond_ret memcpy_cr5, bne
+	beqlr+				; if (r5 == 0) return
+
+byte_copy:
+	cmpli	r5,0			; Compare r5 with zero
+	addi	r10,r10,4		; r10 += 4
+	addi	r4,r4,4			; r4  += 4
+	ghs_log_cond_ret memcpy_cr6, bne
+	beqlr-				; if (r5 == 0) return
+byte_aligned:
+	mtctr	r5
+30:	subi	r5, r5, 1		; Update index (r5)
+	lbzx	r6, r5, r4		; Load  r6
+	stbx	r6, r5, r10		; Store r6
+	bdnz+	30b			; loop while --counter != 0
+	ghs_log_epilogue memcpy
+	blr				; return r3
+
+/*--------------------------------------------------------------------------*/
+
+dest_misaligned:
+
+	; r11 is non-zero and contains the least significant two bits of the
+	; destination address. Using this information, copy enough data
+	; to get the destination word aligned.
+
+	cmpli	cr1,r11,2		; cr1  = compare r3 alignment with 2
+	subfic	r12,r11,4		; r12 = 4 - r11
+	beq+	cr1,copy_2		; if (r8 == 2) goto copy_2
+	bgt	cr1,copy_1		; if (r8 == 3) goto copy_1
+	lbz	r9,6(r4)		; Load  r9
+	stb	r9,6(r10)		; Store r9
+copy_2:	lbz	r9,5(r4)		; Load  r9
+	stb	r9,5(r10)		; Store r9
+copy_1:	lbz	r9,4(r4)		; Load  r9
+	stb	r9,4(r10)		; Store r9
+	add	r4,r4,r12		; r4  += r12
+#ifdef __rs6000c
+	subfc	r5,r12,r5		; r5  -= r12
+#else
+	subf	r5,r12,r5		; r5  -= r12
+#endif
+	add	r10,r10,r12		; r10 += r12
+
+	; Destination is word aligned. If source is now also word aligned,
+	; use fast copy.
+
+	andi.	r0,r4,3			; r0. = r4 & 3
+	beq-	word_aligned		; Best-case alignment
+
+src_misaligned:
+
+	; r0 is non-zero and contains the least significant two bits of the
+	; source address. Using this information, calculate the bit-shift
+	; amount and mask. Also calculate the loop counter (ctr) and
+	; remainder (r5).
+
+	srwi	r6,r5,2			; r6  = r5 / 4
+	slwi	r11,r0,3		; r11 = number bits to shift
+	li	r12,-1			; r12 = ~0
+	mtctr	r6			; ctr = r6
+	slw	r12,r12,r11		; r12 = ~0 << N
+#ifdef __rs6000c
+	subfc	r4,r0,r4		; r4 is now word aligned
+#else
+	subf	r4,r0,r4		; r4 is now word aligned
+#endif
+	subic. 	r6, r0, 2
+	beq  	prime_2
+	li   	r6,0
+	bgt  	prime_1
+	lbz  	r6,5(r4)
+#ifdef __BigEndian
+	slwi 	r6,r6,16
+prime_2:lbz  	r8,6(r4)
+	rlwimi 	r6,r8,8,16,23
+prime_1:lbz  	r8,7(r4)
+	or   	r6,r6,r8
+	addi 	r4,r4,4
+	slw	r6,r6,r11		; Rotate into position
+#else
+	slwi 	r6,r6,8
+prime_2:lbz  	r8,6(r4)
+	rlwimi 	r6,r8,16,8,15
+prime_1:lbz  	r8,7(r4)
+	rlwimi 	r6,r8,24,0,7
+	addi 	r4,r4,4
+	srw	r6,r6,r11
+	subfic	r11,r11,32		; r11 = 32 - r11
+	rotlw	r12,r12,r11		; Correct for little endian mode
+#endif
+	bdz     final
+40:
+	and	r7,r6,r12		; Mask out next iteration's data
+	lwzu	r8,4(r4)		; Get the rest of this iteration
+	rotlw	r6,r8,r11		; Rotate into position
+	andc	r8,r6,r12		; Mask out next iteration's data
+	or	r7,r7,r8		; Combine the two fragments
+	stwu	r7,4(r10)		; Store
+	bdnz+	40b			; loop while --counter != 0
+	
+final:	and	r6,r6,r12		; Mask out next iteration's data
+	li   	r8,0
+	beq  	final_2
+	blt  	final_1
+	lbz  	r8,6(r4)
+#ifdef __BigEndian
+	slwi 	r8,r8,8
+final_2:lbz  	r7,5(r4)
+	rlwimi 	r8,r7,16,8,15
+final_1:lbzu  	r7,4(r4)
+	andi.	r5,r5,3			; r5  = r5 % 4
+	rlwimi 	r8,r7,24,0,7
+	rotlw	r8,r8,r11		; Rotate into position
+#else
+	slwi 	r8,r8,16
+final_2:lbz  	r7,5(r4)
+	rlwimi 	r8,r7,8,16,23
+final_1:lbzu  	r7,4(r4)
+	andi.	r5,r5,3			; r5  = r5 % 4
+	or   	r8,r8,r7
+	slw	r8,r8,r11		; Rotate into position
+#endif
+	or	r6,r6,r8		; Combine the two fragments
+	stw	r6,4(r10)		; Store
+	
+	ghs_log_cond_ret memcpy_cr7, bne
+	beqlr				; if (r5 == 0) return
+
+	addi	r10,r10,8		; r10 += 8
+	add	r4,r4,r0		; r4  += r0
+	b	byte_aligned		; Copy the last (up to) 3 bytes
+
+/*--------------------------------------------------------------------------*/
+#endif	/* __vle */
+#if defined(__ELF)
+	.fsize	0
+	.scall	__leaf__
+# if defined(__PPC64_ABI__) && !defined(__PPC64_NO_FUNC_DESC)
+	.type	.memcpy,@function
+	.size	.memcpy,$-.memcpy
+# else
+	.type	memcpy,@function
+	.size	memcpy,$-memcpy
+# endif
+#endif
+
+	/* .ghpepatch entries */
+	ghs_fee_ghpepatch memcpy
+#ifndef __vle
+#  if defined(_NO_CACHE_INHIBITED_MEMORY) && defined(__ALTIVEC__)
+	ghs_cond_return_ghpepatch memcpy_cr1
+	ghs_cond_return_ghpepatch memcpy_cr2
+#  endif
+#  ifdef __SPE__
+	ghs_cond_return_ghpepatch memcpy_cr3
+#  endif
+#  ifndef DONT_NEED_UNROLLED_WORD
+	ghs_cond_return_ghpepatch memcpy_cr4
+#  endif
+	ghs_cond_return_ghpepatch memcpy_cr5
+	ghs_cond_return_ghpepatch memcpy_cr6
+	ghs_cond_return_ghpepatch memcpy_cr7
+#endif

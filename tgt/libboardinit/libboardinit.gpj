@@ -1,0 +1,6 @@
+#!gbuild
+#component libboardinit
+[Library]
+	-DEMBEDDED :select=ppc :select=cxx :select=cc :select=c
+	:binDir=libboardinit
+mpc563x.ppc

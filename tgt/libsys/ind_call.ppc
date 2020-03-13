@@ -1,0 +1,392 @@
+/*
+*
+*                Language Independent Library
+*
+*       Copyright 1983-2000 Green Hills Software,Inc.
+*
+*  This program is the property of Green Hills Software, Inc,
+*  its contents are proprietary information and no part of it
+*  is to be disclosed to anyone except employees of Green Hills
+*  Software, Inc., or as agreed in writing signed by the President
+*  of Green Hills Software, Inc.
+*
+*/
+/* ind_call.ppc: C callable wrapper for Host I/O system calls (PPC family). */
+
+	.file	"ind_call.ppc"
+#include "ppc_regs.ppc" 
+
+#if defined(EMBEDDED) || defined(__OSE)
+
+#if (defined(MINIMAL_STARTUP) || defined(TRANSFER_VECTOR)) && !defined(NO_FAR_SYSCALL)
+#define NO_FAR_SYSCALL
+#endif
+
+	dtrace_stamp ind_call.pcc
+
+#ifdef __vle
+	.section ".vletext", "vax"
+	.vle
+
+	.globl	__ghs_syscall
+__ghs_syscall:
+	stack_entry
+	block_entry
+#if defined(NO_FAR_SYSCALL)
+        se_mflr r0			# prolog
+	word_preimage sp, 4
+        se_stw  r0, 4(sp)		# ''
+	word_preimage sp, -8
+	stack_push -8, r12
+#else
+	word_preimage sp, -16
+	stack_push -16, r12		# prolog
+        se_mflr r0			# ''
+	word_preimage sp, 12
+	se_stw	r31, 12(sp)		# ''
+	word_preimage sp, 20
+	se_stw	r0, 20(sp)		# ''
+#endif
+	crset	2			# set Z(EQ) flag
+#if defined(TRANSFER_VECTOR)
+	e_bl	%tv(__dotsyscall) 	# call into .syscall section
+	se_beq	__noerr			# if no error, return
+	e_bl	%tv(__gh_set_errno)	# else set errno with r3 error code
+#else
+
+#if defined(NO_FAR_SYSCALL)
+	e_bl	__dotsyscall		# call into .syscall section
+#else
+	se_bl 	piclab
+piclab: block_entry
+	se_mflr		r0
+	e_lis		r31, %hiadj(__dotsyscall-piclab)
+	e_add16i	r31, r31, %lo(__dotsyscall-piclab)
+	se_add		r31, r0
+	mtctr		r31
+	se_bctrl	
+#endif
+	block_entry
+	se_beq	__noerr			# if no error, return
+	block_entry
+	e_bl	__gh_set_errno		# else set errno with r3 error code
+#endif
+	block_entry
+	se_bmaski r3, 0			# and return -1
+__noerr:
+	block_entry
+#if defined(NO_FAR_SYSCALL)
+	se_lwz	r0, 12(sp)		# epilog
+	se_mtlr	r0			# ''
+	se_addi	sp, 8			# ''
+	#define SZ 8
+#else
+	se_lwz	r0, 20(sp)		# epilog
+	se_lwz	r31, 12(sp)		# ''
+	se_mtlr	r0			# ''
+	se_addi	sp, 16			# ''
+	#define SZ 16
+#endif
+	stack_exit
+	se_blr				# done
+	
+#else /* __vle */
+	.text
+
+# if defined(__PPC64_ABI__) && !defined(__PPC64_NO_FUNC_DESC)
+	.section ".opd", "aw"
+	.align 3
+	.global __ghs_syscall
+__ghs_syscall:
+	.quad	.__ghs_syscall, .TOC.@tocbase, 0
+	.size 	__ghs_syscall, 24
+
+	.text
+	.globl	.__ghs_syscall
+.__ghs_syscall:
+# else
+	.globl	__ghs_syscall
+__ghs_syscall:
+# endif
+	stack_entry
+	block_entry
+        mflr    r0			# prolog
+#ifdef __PPC64__
+#  ifdef __PPC64_ABI__
+	std	r0, 16(sp)
+	stack_push -112, r12            # 6(header)+8(parm save area) double words
+#  else
+	std     r0, 8(sp)
+	stdu    sp, -16(sp)
+#  endif
+#else
+	word_preimage sp, 4
+        stw     r0, 4(sp)		# ''
+	word_preimage sp, -8
+	stack_push	-8, r12
+#endif
+	crset	2			# set Z(EQ) flag
+/* Note: the + on the beq below sidesteps the PPC860 erratum that may otherwise
+   result (as we hit the beq after executing a blr in ind_dots.ppc)
+   This erratum is numbered CPU3(CPU8) */
+#if defined(TRANSFER_VECTOR)
+	bl	%tv(__dotsyscall) 	# call into .syscall section
+	beq+	__noerr			# if no error, return
+	bl	%tv(__gh_set_errno)	# else set errno with r3 error code
+#else
+
+#if defined(NO_FAR_SYSCALL)
+	bl	__dotsyscall		# call into .syscall section
+#else
+	bl 	piclab
+piclab: block_entry
+	mflr	r0
+	lis	r12, %hiadj(__dotsyscall-piclab)
+	addi	r12, r12, %lo(__dotsyscall-piclab)
+	add	r12, r12, r0
+	mtctr	r12
+	bctrl	
+#endif
+	block_entry
+	beq+	__noerr			# if no error, return
+	block_entry
+	bl	__gh_set_errno		# else set errno with r3 error code
+#endif
+	block_entry
+#ifdef __PPC64_ABI__
+	nop
+#endif
+	li	r3, -1			# and return -1
+__noerr:
+	block_entry
+#ifdef __PPC64__
+	extsw	r3, r3			# sign-extend result
+#  ifdef __PPC64_ABI__
+	ld	r0, 128(sp)
+	mtlr	r0
+	addi	sp, sp, 112
+	#define SZ 112
+#  else
+	ld      r0, 24(sp)
+	mtlr    r0
+	addi    sp, sp, 16
+	#define SZ 16
+#  endif
+#else
+	lwz	r0, 12(sp)		# epilog
+	mtlr	r0			# ''
+	addi	sp, sp, 8		# ''
+	#define SZ 8
+#endif
+	stack_exit
+	blr				# done
+#endif /* __vle */
+
+#ifdef __ELF
+	.fsize	SZ
+	.scall	__dotsyscall
+	.scall	__gh_set_errno
+# if defined(__PPC64_ABI__) && !defined(__PPC64_NO_FUNC_DESC)
+	.type .__ghs_syscall,@function
+	.size .__ghs_syscall,$-.__ghs_syscall
+# else
+	.type __ghs_syscall,@function
+	.size __ghs_syscall,$-__ghs_syscall
+# endif
+#endif /* __ELF */
+
+#ifdef __vle
+	.section ".vletext", "vax"
+	.vle
+
+	.globl	__ghs_syscall64
+__ghs_syscall64:
+	stack_entry
+	block_entry
+#if defined(NO_FAR_SYSCALL)
+        se_mflr r0			# prolog
+	word_preimage sp, 4
+        se_stw  r0, 4(sp)		# ''
+	word_preimage sp, -8
+	stack_push -8, r12
+#else
+	word_preimage sp, -16
+	stack_push -16, r12
+        se_mflr r0			# ''
+	word_preimage sp, 12
+	se_stw	r31, 12(sp)		# ''
+	word_preimage sp, 20
+	se_stw	r0, 20(sp)		# ''
+#endif
+	crset	2			# set Z(EQ) flag
+#if defined(TRANSFER_VECTOR)
+	e_bl	%tv(__dotsyscall) 	# call into .syscall section
+	se_beq	__noerr			# if no error, return
+	e_bl	%tv(__gh_set_errno)	# else set errno with r3 error code
+#else
+
+#if defined(NO_FAR_SYSCALL)
+	e_bl	__dotsyscall		# call into .syscall section
+#else
+	se_bl 	piclab64
+piclab64: block_entry
+	se_mflr		r0
+	e_lis		r31, %hiadj(__dotsyscall-piclab64)
+	e_add16i	r31, r31, %lo(__dotsyscall-piclab64)
+	se_add		r31, r0
+	mtctr		r31
+	se_bctrl	
+#endif
+	block_entry
+	se_beq	__noerr64		# if no error, return
+	block_entry
+	e_bl	__gh_set_errno		# else set errno with r3 error code
+#endif
+	block_entry
+	se_bmaski r3, 0			# and return -1
+	se_bmaski r7, 0
+__noerr64:
+	block_entry
+	/* Now, least significant 32 bits of the syscall return value are in
+	   r3, and most significant are in r7 (syscalls can't write directly
+	   to r4 because crt0.ppc relies on r4-r6 being preserved, and newer
+	   syscall implementations need to support existing target
+	   libraries). */
+#if defined(__BigEndian)
+	se_mr	r4, r3
+	se_mr	r3, r7
+#else
+	se_mr	r4, r7
+#endif
+#if defined(NO_FAR_SYSCALL)
+	se_lwz	r0, 12(sp)		# epilog
+	se_mtlr	r0			# ''
+	se_addi	sp, 8			# ''
+#else
+	se_lwz	r0, 20(sp)		# epilog
+	se_lwz	r31, 12(sp)		# ''
+	se_mtlr	r0			# ''
+	se_addi	sp, 16			# ''
+#endif
+	stack_exit
+	se_blr				# done
+	
+#else /* __vle */
+	.text
+
+# if defined(__PPC64_ABI__) && !defined(__PPC64_NO_FUNC_DESC)
+	.section ".opd", "aw"
+	.align 3
+	.global __ghs_syscall64
+__ghs_syscall64:
+	.quad	.__ghs_syscall64, .TOC.@tocbase, 0
+	.size 	__ghs_syscall64, 24
+
+	.text
+	.globl	.__ghs_syscall64
+.__ghs_syscall64:
+# else
+	.globl	__ghs_syscall64
+__ghs_syscall64:
+# endif
+	stack_entry
+	block_entry
+        mflr    r0			# prolog
+#ifdef __PPC64__
+#  ifdef __PPC64_ABI__
+	std	r0, 16(sp)
+	stack_push -112, r12            # 6(header)+8(parm save area) double words
+#  else
+	std     r0, 8(sp)
+	stdu    sp, -16(sp)
+#  endif
+#else
+	word_preimage sp, 4
+        stw     r0, 4(sp)		# ''
+	word_preimage sp, -8
+	stack_push -8, r12
+#endif
+	crset	2			# set Z(EQ) flag
+/* Note: the + on the beq below sidesteps the PPC860 erratum that may otherwise
+   result (as we hit the beq after executing a blr in ind_dots.ppc)
+   This erratum is numbered CPU3(CPU8) */
+#if defined(TRANSFER_VECTOR)
+	bl	%tv(__dotsyscall) 	# call into .syscall section
+	beq+	__noerr64		# if no error, return
+	bl	%tv(__gh_set_errno)	# else set errno with r3 error code
+#else
+
+#if defined(NO_FAR_SYSCALL)
+	bl	__dotsyscall		# call into .syscall section
+#else
+	bl 	piclab64
+piclab64: block_entry
+	mflr	r0
+	lis	r12, %hiadj(__dotsyscall-piclab64)
+	addi	r12, r12, %lo(__dotsyscall-piclab64)
+	add	r12, r12, r0
+	mtctr	r12
+	bctrl	
+#endif
+	block_entry
+	beq+	__noerr64		# if no error, return
+	block_entry
+	bl	__gh_set_errno		# else set errno with r3 error code
+#endif
+	block_entry
+#ifdef __PPC64_ABI__
+	nop
+#endif
+	li	r3, -1			# and return -1
+#ifndef __PPC64__
+	li	r7, -1
+#endif
+__noerr64:
+	block_entry
+#ifdef __PPC64__
+#  ifdef __PPC64_ABI__
+	ld	r0, 128(sp)
+	mtlr	r0
+	addi	sp, sp, 112
+#  else
+	ld      r0, 24(sp)
+	mtlr    r0
+	addi    sp, sp, 16
+#  endif
+#else
+	/* Now, least significant 32 bits of the syscall return value are in
+	   r3, and most significant are in r7 (syscalls can't write directly
+	   to r4 because crt0.ppc relies on r4-r6 being preserved, and newer
+	   syscall implementations need to support existing target
+	   libraries). */
+#if defined(__BigEndian)
+	mr	r4, r3
+	mr	r3, r7
+#else
+	mr	r4, r7
+#endif
+	lwz	r0, 12(sp)		# epilog
+	mtlr	r0			# ''
+	addi	sp, sp, 8		# ''
+#endif
+	stack_exit
+	blr				# done
+#endif /* __vle */
+
+#ifdef __ELF
+	.fsize	SZ
+	.scall	__dotsyscall
+	.scall	__gh_set_errno
+# if defined(__PPC64_ABI__) && !defined(__PPC64_NO_FUNC_DESC)
+	.type .__ghs_syscall64,@function
+	.size .__ghs_syscall64,$-.__ghs_syscall64
+# else
+	.type __ghs_syscall64,@function
+	.size __ghs_syscall64,$-__ghs_syscall64
+# endif
+#endif /* __ELF */
+
+	.ghsnote tools, 0x400
+
+#endif
+

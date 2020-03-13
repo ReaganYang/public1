@@ -1,0 +1,41 @@
+{
+  "fw_version_min" : [ 4, 2 ],
+  "config": [
+    {
+      "options": {
+        "core 0": {
+          "censor_hi": "0x0", 
+          "censor_lo": "0x0", 
+          "censor_unlock": "off", 
+          "disable_swt": "on", 
+          "endianness": "big", 
+          "freeze_timers": "off", 
+          "mmu_support": "auto", 
+          "running_mem_access": "allow", 
+          "step_ints": "on", 
+          "sync_etpu": "on"
+        }, 
+        "core 1": {
+          "endianness": "big"
+        }, 
+        "global": {
+          "adapter": "auto", 
+          "checker": "on", 
+          "clock": "4 MHz", 
+          "jrst_pulse": "5 ms", 
+          "jrst_settle": "300 ms", 
+          "logic_high": "3.3", 
+          "power_detect": "on", 
+          "rst_pulse": "5 ms", 
+          "rst_settle": "300 ms", 
+          "target": "ppc563xM", 
+          "target_reset_pin": "independent"
+        }
+      }
+    }
+  ], 
+  "version": [
+    2, 
+    0
+  ]
+}

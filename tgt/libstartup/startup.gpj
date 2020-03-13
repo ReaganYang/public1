@@ -1,0 +1,12 @@
+#!gbuild
+#component libstartup
+[Subproject]
+	-DEMBEDDED :select=ppc :select=cxx :select=cc :select=c
+	:binDir=libstartup
+	-I../libsys
+	{isdefined(__TOOLS_DIR__)} -I${__TOOLS_DIR__}/src/libsys
+	{isundefined(__TOOLS_DIR__)} -I${__MULTI_DIR__}/src/libsys
+crt0.ppc
+	:outputDir=.
+	-I../libsys
+libstartup.gpj		[Library]

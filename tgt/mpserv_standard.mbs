@@ -1,0 +1,98 @@
+
+// MULTI Server Script
+// Freescale MPC563x demo board setup script for MPServ
+
+// reset
+target rst
+
+
+// setup TLB entries the boot monitor would normally handle
+target tlbw 0 0xfff00000 0x12802bf 0xfff00000 0x1
+target tlbw 1 0x00000000 0x138003f 0x00000000 0x1
+target tlbw 2 0x20000000 0x138003f 0x00000000 0x1
+target tlbw 3 0x40000000 0x120023f 0x40000000 0x1
+target tlbw 4 0xc3f00000 0x12802bf 0xc3f00000 0x1
+
+target rw msr 0x02000000
+
+//turn off the watchdog timer
+memwrite 4 0xfff38000 0xff00000a
+
+// Whether or not to check for VLE
+eval $vle_check = 1
+
+// Initialize vector pointers to something that exists
+// Currently, use internal SRAM
+eval $ivpr = 0x40000000
+eval $ivor0 = 0x10
+eval $ivor1 = 0x20
+eval $ivor2 = 0x30
+eval $ivor3 = 0x40
+eval $ivor4 = 0x50
+eval $ivor5 = 0x60
+eval $ivor6 = 0x70
+eval $ivor7 = 0x80
+eval $ivor8 = 0x90
+eval $ivor9 = 0xa0
+eval $ivor10 = 0xb0
+eval $ivor11 = 0xc0
+eval $ivor12 = 0xd0
+eval $ivor13 = 0xe0
+eval $ivor14 = 0xf0
+eval $ivor15 = 0x100
+eval $ivor32 = 0x110
+eval $ivor33 = 0x120
+eval $ivor34 = 0x130
+
+// Fill exception vectors with branch to self
+// Also, initialize all SRAM ECC bits by performing a fill
+// You will want to select the appropriate line below depending on how much
+// memory your target has
+
+//target mf 0x40000000i 0x10000 0x48000000 //64k SRAM
+target mf 0x40000000i 0xc000 0x48000000 //48k SRAM
+//target mf 0x40000000i 0xa000 0x48000000 //40k SRAM
+//target mf 0x40000000i 0x8000 0x48000000 //32k SRAM
+//target mf 0x40000000i 0x6000 0x48000000 //24k SRAM 
+
+
+// Check for VLE.
+// If the .vletext exists, we will assume that the entire program is built
+// in VLE mode.
+// If different/additional pages need to have VLE enabled, this is where
+// to do it.
+if ($vle_check == 1)  {
+    if ($M_sec_exists(".vletext") || $PROGRAMMING_FLASH)  {
+    
+	// print "Configuring TLB pages for VLE."
+	
+	// Turn on VLE bit for internal SRAM
+	target tlbw 3 0x40000000 0x320003f 0x40000000 0x01
+    
+	// Fill exception vectors with VLE branch to self
+	target mf 0x40000000 0x200 0xe800e800
+    
+    	$RAM_VLE = 1;
+    }
+}
+
+substitute if (%EVAL{__tracearchid} == 11) {
+    trace set overflow_avoidance_method stall
+    // These options must be set manually in MULTI 5
+    if (_MULTI_MAJOR_VERSION > 5) {
+	trace set "MDO Data Port Width" "4 bits"
+	trace set "Trace Clock Multiplier" "1/1x"
+    }
+}
+
+// Use a faster, more accurate clock for the SYSCLK. 
+// FMPLL: select normal mode external crystal reference.
+// SYSCLK = (12MHz / 1) * (32 / 8) == 48MHz
+target mw 0xc3f8000c 0x00000002
+target mw 0xc3f80008 0xb0000020
+wait -time 10
+if ((*((volatile unsigned int*)0xc3f80004) & 0x18) != 0x18) {
+    mprintf("PLL failed to lock.\n")
+}
+target mw 0xc3f80008 0xf0000020
+

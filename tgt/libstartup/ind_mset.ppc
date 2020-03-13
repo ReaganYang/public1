@@ -1,0 +1,195 @@
+/*
+ *		    ANSI C Runtime Library
+ *	
+ *	Copyright 1983-2000 Green Hills Software, Inc.
+ *
+ *  This program is the property of Green Hills Software, Inc,
+ *  its contents are proprietary information and no part of it
+ *  is to be disclosed to anyone except employees of Green Hills
+ *  Software, Inc., or as agreed in writing signed by the President
+ *  of Green Hills Software, Inc.
+ */	
+
+	.file	"ind_mset.ppc"
+
+#define USES_SPE
+#include "ppc_regs.ppc"
+
+#if defined(__REG_BIT) && __REG_BIT == 64
+#define USE_64INST
+#endif
+
+#ifdef	__vle
+	.section ".vletext", "vax"
+	.vle
+#else	/* __vle */
+	.text
+#endif	/* __vle */
+
+;bzero, a depricated function, is provided in libansi.a
+;   the version below has the same performance as changing your call from
+;   bzero(s,n) ===> memset(s,0,n)
+;	.globl bzero
+;bzero:
+;	.need memset
+;	mr	r5, r4		; put count where it is expected
+;	li	r4, 0		; we are 0'ing out the memory
+;				; flow through into memset
+#if defined(__PPC64_ABI__) && !defined(__PPC64_NO_FUNC_DESC)
+	.section ".opd", "aw"
+	.align 3
+	.globl memset
+memset:
+	.quad	.memset, .TOC.@tocbase, 0
+	.size	memset, 24
+
+	.text
+	.align 2
+	.globl .memset
+.memset:
+#else
+	.globl	memset
+memset:
+#endif
+	ghs_log_prologue memset
+#ifdef	__vle
+	se_cmpli r5, 32	; see if we are guaranteed a 16-byte aligned block
+	se_mr	r6, r3
+	se_blt	do_end
+
+	insrwi	r4, r4, 8, 16	; copy input char into bytes directly above
+	e_andi.	r7, r3, 15	; see if we're starting on a 16-byte boundary
+	insrwi	r4, r4, 16, 0	; r4 is now a 4 copies of the input char
+#if defined(__SPE__)
+	evmergelo r4, r4, r4	; r4 now contains 8 copies of the input char
+#endif /* __SPE__ */
+	se_beq	do_middle
+
+	e_subfic r7, r7, 16	; do the bytes before the 16-byte boundary
+	se_subi	r6, 1		; prepare for stbu
+	se_sub	r5, r7
+	se_mtctr r7
+begin_loop:
+	e_stbu	r4, 1(r6)
+	e_bdnz	begin_loop
+	se_addi	r6, 1
+
+do_middle:
+	e_srwi	r7, r5, 4	; do as much as we can in 16-byte blocks
+#if defined(__SPE__)
+	se_andi	r5, 15		; kill all but low order 4 bits
+	se_mtctr r7
+middle_loop:
+	evstdd	r4, 0(r6)
+	evstdd  r4, 8(r6)
+	se_addi	r6, 16
+	e_bdnz	middle_loop
+#else
+	se_subi	r6, 4		; prepare for stwu
+	se_andi	r5, 15		; kill all but low order 4 bits
+	se_mtctr r7
+middle_loop:
+	se_stw	r4, 4(r6)
+	se_stw	r4, 8(r6)
+	se_stw	r4, 12(r6)
+	e_stwu	r4, 16(r6)
+	e_bdnz	middle_loop
+	se_addi	r6, 4
+#endif	/* !__SPE__ */
+
+do_end:
+	se_cmpi r5, 0		; do any leftover bytes
+	se_beq	done
+	se_subi	r6, 1		; prepare for stbu
+	se_mtctr r5
+end_loop:
+	e_stbu	r4, 1(r6)
+	e_bdnz	end_loop
+done:
+	ghs_log_epilogue memset
+	se_blr
+#else	/* __vle */
+#ifdef USE_64INST
+	cmpldi  r5, 32
+#else
+	cmplwi	r5, 32	; see if we are guaranteed a 16-byte aligned block
+#endif
+	mr	r9, r3
+	blt	do_end
+
+	insrwi	r4, r4, 8, 16	; copy input char into bytes directly above
+	andi.	r12, r3, 15	; see if we're starting on a 16-byte boundary
+	insrwi	r4, r4, 16, 0	; r4 is now a 4 copies of the input char
+#if defined(__SPE__)
+	evmergelo r4, r4, r4	; r4 now contains 8 copies of the input char
+#endif /* __SPE__ */
+	beq	do_middle
+
+	subfic	r12, r12, 16	; do the bytes before the 16-byte boundary
+	addi	r9, r9, -1	; prepare for stbu
+	subfc	r5, r12, r5
+	mtctr	r12
+begin_loop:
+	stbu	r4, 1(r9)
+	bdnz	begin_loop
+	addi	r9, r9, 1
+
+do_middle:
+#ifdef USE_64INST
+	srdi    r12, r5, 4
+#else
+	srwi	r12, r5, 4	; do as much as we can in 16-byte blocks
+#endif
+#if defined(__SPE__)
+	clrlwi	r5, r5, 28	; kill all but low order 4 bits
+	mtctr	r12
+middle_loop:
+	evstdd	r4, 0(r9)
+	evstdd  r4, 8(r9)
+	addi	r9, r9, 16
+	bdnz	middle_loop
+#else
+	addi	r9, r9, -4	; prepare for stwu
+	clrlwi	r5, r5, 28	; kill all but low order 4 bits
+	mtctr	r12
+middle_loop:
+	stw	r4, 4(r9)
+	stw	r4, 8(r9)
+	stw	r4, 12(r9)
+	stwu	r4, 16(r9)
+	bdnz	middle_loop
+	addi	r9, r9, 4
+#endif	/* !__SPE__ */
+
+do_end:
+#ifdef USE_64INST
+	cmpldi	r5, 0		; do any leftover bytes
+#else
+	cmplwi	r5, 0		; do any leftover bytes
+#endif
+	ghs_log_cond_ret memset_cr, bne
+	beqlr
+	addi	r9, r9, -1	; prepare for stbu
+	mtctr	r5
+end_loop:
+	stbu	r4, 1(r9)
+	bdnz	end_loop
+	ghs_log_epilogue memset
+	blr
+#endif	/* __vle */
+#if defined(__ELF)
+	.fsize	0
+	.scall	__leaf__
+# if defined(__PPC64_ABI__) && !defined(__PPC64_NO_FUNC_DESC)
+	.type	.memset,@function
+	.size	.memset,$-.memset
+# else
+	.type	memset,@function
+	.size	memset,$-memset
+# endif
+#endif
+
+	ghs_fee_ghpepatch memset
+#ifndef __vle
+	ghs_cond_return_ghpepatch memset_cr
+#endif
